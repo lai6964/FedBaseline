@@ -1,30 +1,30 @@
 import os
+import random
+import torch
+import torchvision
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 from tqdm import tqdm
-from network import *
+import numpy as np
+import copy
 
-def create_if_not_exists(path: str) -> None:
-    if not os.path.exists(path):
-        os.makedirs(path)
+def init_model_by_name(name):
+    return torchvision.models.resnet18()
+
 
 class Client(nn.Module):
-    def __init__(self, id, model_name, train_loader=None, test_loader=None):
+    def __init__(self, id, model_name=None, train_loader=None, test_loader=None):
         super(Client, self).__init__()
         self.name = "client_{}_{}".format(id, model_name)
-        self.model_path = self.result_path+self.name+".pth"
+        self.model_name = model_name
         self.train_loader, self.test_loader = train_loader, test_loader
 
     def init_clinet(self):
-        feature_extractor, feature_dim = get_extractor_by_name(model_name, True)
-        custom_classifier = CustomClassifier(feature_dim, num_classes)
-        self.model = FeatureExtractorWithClassifier(feature_extractor, custom_classifier)
+        self.model = init_model_by_name(self.model_name)
 
-    def train(self):
+    def _localupdate(self):
         self.model.to(self.args.device)
         optimizer = optim.Adam(self.model.parameters(), lr=self.args.local_lr, weight_decay=1e-5)
-
 
         self.model.train()
         iterator = tqdm(range(self.args.local_epoch))
@@ -43,24 +43,6 @@ class Client(nn.Module):
             iterator.desc = "{} Epoch %d Local loss = %0.6f at lr = %0.7f for testloss = %0.4f testacc = %.3f" % (
                 self.name, epoch, trainloss, optimizer.param_groups[0]['lr'])
 
-    def eval(self):
-        self.model.to(self.args.device)
-        self.model.eval()
-        with torch.no_grad():
-            correct = 0
-            total = 0
-            for batch_idx, (images, labels) in enumerate(self.train_loader):
-                images = images.to(self.device)
-                labels = labels.to(self.device)
-                outputs = self.model(images)
-                predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
-            acc = 100 * correct / total
-        return acc
-
-    def save_model(self):
-        torch.save(self.model.state_dict(), self.model_path)
 
     def clone_model(self, global_model):
         for param, target_param in zip(self.model.parameters(), global_model.parameters()):
@@ -69,12 +51,24 @@ class Client(nn.Module):
 class Server(nn.Module):
     def __init__(self, args):
         super(Server, self).__init__()
-        self.name = "FedAvg"
         self.args = args
-        self.result_path = 'results/' + self.name + '/'
-        self.clients_list = []
-
     def init_server(self):
-        create_if_not_exists(self.result_path)
-        for idx in range(self.args.N_Participants):
-            client = Client(idx)
+        self.global_model = init_model_by_name(self.args.Nets_Name_List[0])
+
+
+    def aggregation(self, clients_list):
+        global_dict = self.global_model.state_dict()
+        for key in global_dict.keys():
+            global_dict[key] = torch.zeros_like(global_dict[key])
+
+        for client_model in self.clients_list_choice:
+            client_dict = client_model.state_dict()
+            for key in client_dict.keys():
+                global_dict[key] += client_dict[key] / len(self.clients_list_choice)
+        self.global_model.load_state_dict(global_dict)
+
+    def update_client(self):
+        for client in self.clients_list_choice:
+            client = copy.deepcopy(self.global_model)
+            client._localupdate()
+

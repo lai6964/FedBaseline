@@ -15,14 +15,17 @@ class MyDigits(torch.utils.data.Dataset):
 
     def __build_truncated_dataset__(self):
         if self.data_name == 'mnist':
-            dataobj = MNIST(self.root + self.data_name, self.train, self.transform, self.target_transform, self.download)
+            dataobj = MNIST(self.root, self.train, self.transform, self.target_transform, self.download)
         elif self.data_name == 'usps':
-            dataobj = USPS(self.root + self.data_name, self.train, self.transform, self.target_transform, self.download)
+            dataobj = USPS(self.root, self.train, self.transform, self.target_transform, self.download)
         elif self.data_name == 'svhn':
             if self.train:
                 dataobj = SVHN(self.root + self.data_name, 'train', self.transform, self.target_transform, self.download)
             else:
                 dataobj = SVHN(self.root + self.data_name, 'test', self.transform, self.target_transform, self.download)
+
+        self.data = dataobj.data
+        self.targets = dataobj.targets
         return dataobj
 
     def __getitem__(self, index):
@@ -35,3 +38,5 @@ class MyDigits(torch.utils.data.Dataset):
             target = self.target_transform(target)
 
         return img, target
+
+
