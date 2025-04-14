@@ -26,6 +26,7 @@ def args_parser():
     parser.add_argument('--public_batch_size', type=int, default=256)
     parser.add_argument('--ReLoad', type=str2bool, default=False)
     parser.add_argument('--lrschedule', type=str2bool, default=False)
+    parser.add_argument('--clients_select_ratio',type=float,default=0.3)
 
     '''    Data Setting    '''
     parser.add_argument('--Public_Dataset_Name', type=str, default='cifar_100')
