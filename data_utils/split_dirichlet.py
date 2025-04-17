@@ -43,3 +43,6 @@ if __name__ == '__main__':
     for i, dataset in enumerate(client_datasets):
         labels = [train_dataset.targets[idx].item() for idx in dataset.indices]
         print(f"Client {i} has {len(labels)} samples with distribution: {torch.bincount(torch.tensor(labels))}")
+
+    for batch_idx, (images, labels) in enumerate(client_data_loaders[0]):
+        print(images.shape)

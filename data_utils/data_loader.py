@@ -20,9 +20,9 @@ class MyDigits(torch.utils.data.Dataset):
             dataobj = USPS(self.root, self.train, self.transform, self.target_transform, self.download)
         elif self.data_name == 'svhn':
             if self.train:
-                dataobj = SVHN(self.root + self.data_name, 'train', self.transform, self.target_transform, self.download)
+                dataobj = SVHN(self.root, 'train', self.transform, self.target_transform, self.download)
             else:
-                dataobj = SVHN(self.root + self.data_name, 'test', self.transform, self.target_transform, self.download)
+                dataobj = SVHN(self.root, 'test', self.transform, self.target_transform, self.download)
 
         self.data = dataobj.data
         self.targets = dataobj.targets

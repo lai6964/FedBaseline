@@ -1,4 +1,6 @@
 import argparse
+import torch, torchvision
+from backbone.ResNet import ResNet18
 from utils import *
 from data_utils.data_loader import MyDigits
 from data_utils.split_dirichlet import dirichlet_split_noniid
@@ -12,7 +14,7 @@ def args_parser():
     parser.add_argument('--Dataset_Dir',type=str,default='../Dataset/')
     parser.add_argument('--Model_Path',type=str,default='Model_Storage')
     parser.add_argument('--model', type=str, default='SOLO', help='Model name.')
-    parser.add_argument('--Scenario',type=str,default='mnist')
+    parser.add_argument('--Scenario',type=str,default='MNIST')
 
 
     '''    Traning Setting    '''
@@ -27,13 +29,14 @@ def args_parser():
     parser.add_argument('--ReLoad', type=str2bool, default=False)
     parser.add_argument('--lrschedule', type=str2bool, default=False)
     parser.add_argument('--clients_select_ratio',type=float,default=0.3)
+    parser.add_argument('--Nets_Name_List',type=list,default=['ResNet18'])
 
     '''    Data Setting    '''
     parser.add_argument('--Public_Dataset_Name', type=str, default='cifar_100')
     parser.add_argument('--public_len', type=int, default=5000)
     parser.add_argument('--pub_aug', type=str, default='weak')
     parser.add_argument('--N_Class', type=int, default=10)
-    parser.add_argument('--N_Participants', type=int, default=4)
+    parser.add_argument('--N_Participants', type=int, default=10)
     parser.add_argument('--Dirichlet_beta', type=float, default=0.5)
     parser.add_argument('--DataPart', type=str2bool, default=True)
 
@@ -47,29 +50,22 @@ if __name__ == '__main__':
     # 设置随机种子
     init_seed(args.Seed)
 
-    train_dataset = MyDigits(root=args.Dataset_Dir, data_name = args.Scenario)
-    train_labels = train_dataset.targets
+    import torchvision.transforms as transforms
+    Singel_Channel_Nor_TRANSFORM = transforms.Compose(
+        [transforms.Resize((32, 32)),
+         transforms.ToTensor(),
+         transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+         transforms.Normalize((0.485, 0.456, 0.406),
+                              (0.229, 0.224, 0.225))])
+    train_dataset = torchvision.datasets.MNIST(root=args.Dataset_Dir, train=True, download=True, transform=Singel_Channel_Nor_TRANSFORM)
 
     # 使用狄利克雷分布分割数据集
     client_datasets, client_data_loaders = dirichlet_split_noniid(train_dataset, args.Dirichlet_beta, args.N_Participants)
-    # 打印每个客户端的数据分布情况
-    for i, dataset in enumerate(client_datasets):
-        labels = [train_dataset.targets[idx].item() for idx in dataset.indices]
-        print(f"Client {i} has {len(labels)} samples with distribution: {torch.bincount(torch.tensor(labels))}")
 
-    server = Server(args)
-    server.init_server()
-    clients_list = []
-    for idx in range(args.N_Participants):
-        client = Client(idx, args.Nets_Name_List[idx])
-        client.init_clinet()
-        clients_list.append(client)
-
-    for epoch in range(args.CommunicationEpoch):
-        
-
-        clients_per_round = max(int(self.args.N_Participants * self.clients_sample_ratio), 1)
-        self.clients_list_choice = np.random.choice(self.args.N_Participants, clients_per_round)
+    from algorithms.FedAvg import FedAvg
+    server = FedAvg(args)
+    server.ini()
+    server.run(client_data_loaders)
 
 
 
