@@ -6,6 +6,7 @@ from data_utils.data_loader import MyDigits
 from data_utils.split_dirichlet import dirichlet_split_noniid
 from  algorithms.base import Client, Server
 
+
 def args_parser():
     parser = argparse.ArgumentParser()
     '''    Default Setting    '''
@@ -18,10 +19,10 @@ def args_parser():
 
 
     '''    Traning Setting    '''
-    parser.add_argument('--CommunicationEpoch',type=int,default=40)
+    parser.add_argument('--CommunicationEpoch',type=int,default=400)
     parser.add_argument('--features_dim',type=int,default=512)
     parser.add_argument('--public_epoch',type=int,default=1)
-    parser.add_argument('--local_epoch',type=int,default=40)
+    parser.add_argument('--local_epoch',type=int,default=20)
     parser.add_argument('--public_lr',type=float,default=0.001)
     parser.add_argument('--local_lr',type=float,default=0.001)
     parser.add_argument('--local_batch_size', type=int, default=256)
@@ -36,7 +37,7 @@ def args_parser():
     parser.add_argument('--public_len', type=int, default=5000)
     parser.add_argument('--pub_aug', type=str, default='weak')
     parser.add_argument('--N_Class', type=int, default=10)
-    parser.add_argument('--N_Participants', type=int, default=10)
+    parser.add_argument('--N_Participants', type=int, default=60)
     parser.add_argument('--Dirichlet_beta', type=float, default=0.5)
     parser.add_argument('--DataPart', type=str2bool, default=True)
 
@@ -58,6 +59,8 @@ if __name__ == '__main__':
          transforms.Normalize((0.485, 0.456, 0.406),
                               (0.229, 0.224, 0.225))])
     train_dataset = torchvision.datasets.MNIST(root=args.Dataset_Dir, train=True, download=True, transform=Singel_Channel_Nor_TRANSFORM)
+    test_dataset = torchvision.datasets.MNIST(root=args.Dataset_Dir, train=False, download=True, transform=Singel_Channel_Nor_TRANSFORM)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=True)
 
     # 使用狄利克雷分布分割数据集
     client_datasets, client_data_loaders = dirichlet_split_noniid(train_dataset, args.Dirichlet_beta, args.N_Participants)
@@ -65,7 +68,7 @@ if __name__ == '__main__':
     from algorithms.FedAvg import FedAvg
     server = FedAvg(args)
     server.ini()
-    server.run(client_data_loaders)
+    server.run(client_data_loaders,test_loader)
 
 
 

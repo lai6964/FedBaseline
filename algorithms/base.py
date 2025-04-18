@@ -11,7 +11,25 @@ import copy
 def init_model_by_name(name):
     # rewrite soon
     return torchvision.models.resnet18()
-
+def eval_one(net, dataloader, device):
+    net = net.to(device)
+    net.eval()
+    with torch.no_grad():
+        correct = 0
+        total = 0
+        losstotal = 0
+        for images, labels in dataloader:
+            images = images.to(device)
+            labels = labels.to(device)
+            outputs = net(images)
+            loss = torch.nn.CrossEntropyLoss(reduction='mean')(outputs, labels.long())
+            losstotal += loss.item()
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+        acc = 100 * correct / total
+        lossavg = losstotal/len(dataloader)
+    return lossavg, acc
 
 class Client(nn.Module):
     def __init__(self, args, id):
@@ -21,6 +39,7 @@ class Client(nn.Module):
 
     def ini(self, model_name=None):
         self.model = init_model_by_name(model_name)
+        self.model.to(self.args.device)
 
     def train(self, train_loader):
         self.model.to(self.args.device)
@@ -48,6 +67,7 @@ class Server(nn.Module):
 
     def ini(self):
         self.global_model = init_model_by_name(self.args.Nets_Name_List[0])
+        self.global_model.to(self.args.device)
         for idx in range(self.args.N_Participants):
             self.clinets.append(Client(self.args, idx))
             if len(self.args.Nets_Name_List)==1:
