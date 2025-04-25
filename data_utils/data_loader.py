@@ -11,7 +11,7 @@ class MyDigits(torch.utils.data.Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.download = download
-        self.dataset = self.__build_truncated_dataset__()
+        self.data, self.targets = self.__build_truncated_dataset__()
 
     def __build_truncated_dataset__(self):
         if self.data_name == 'mnist':
@@ -24,12 +24,11 @@ class MyDigits(torch.utils.data.Dataset):
             else:
                 dataobj = SVHN(self.root, 'test', self.transform, self.target_transform, self.download)
 
-        self.data = dataobj.data
-        self.targets = dataobj.targets
-        return dataobj
+        return dataobj.data, dataobj.targets
 
     def __getitem__(self, index):
-        img, target = self.dataset[index]
+        img = self.data[index]
+        target = self.targets[index]
         img = Image.fromarray(img, mode='RGB')
 
         if self.transform is not None:

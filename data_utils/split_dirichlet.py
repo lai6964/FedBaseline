@@ -4,7 +4,7 @@ from torch.distributions.dirichlet import Dirichlet
 
 
 def dirichlet_split_noniid(train_dataset, alpha, n_clients):
-    train_labels = train_dataset.targets
+    train_labels = torch.tensor(train_dataset.targets)
     n_classes = train_labels.max() + 1  # 获取类别总数
     label_distribution = Dirichlet(torch.full((n_clients,), alpha)).sample((n_classes,))  # 生成狄利克雷分布
     class_idcs = [torch.nonzero(train_labels == y).flatten() for y in range(n_classes)]  # 获取每个类别的索引
@@ -21,15 +21,17 @@ def dirichlet_split_noniid(train_dataset, alpha, n_clients):
 
     # 创建客户端数据加载器
     client_datasets = [Subset(train_dataset, idcs) for idcs in client_idcs]
-    client_data_loaders = [DataLoader(dataset, batch_size=32, shuffle=True) for dataset in client_datasets]
+    client_data_loaders = [DataLoader(dataset, batch_size=32, shuffle=True, drop_last=True) for dataset in client_datasets]
     return client_datasets, client_data_loaders
 
 
 if __name__ == '__main__':
     from data_loader import *
+    import torchvision
     # 加载 MNIST 数据集
     transform = transforms.Compose([transforms.ToTensor()])
-    train_dataset = MNIST(root='../../Dataset', train=True, download=True, transform=transform)
+    # train_dataset = MNIST(root='../../Dataset', train=True, download=True, transform=transform)
+    train_dataset = torchvision.datasets.CIFAR10(root='../../Dataset', train=True, download=True, transform=transform)
 
     # 设置参数
     n_clients = 10  # 客户端数量

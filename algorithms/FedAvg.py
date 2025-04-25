@@ -36,7 +36,7 @@ class FedAvg(Server):
 
             if 1:#epoch>10:# and len(test_loader):
                 testloss, testacc = eval_one(self.global_model, test_loader, self.args.device)
-                with open("FedAvg_result2.txt", 'a+') as fp:
+                with open("FedAvg_result3.txt", 'a+') as fp:
                     fp.writelines("\nepoch_{}_acc:{:.3f}_loss:{:.6f}".format(epoch, testacc, testloss))
             print("epoch_{}_acc:{:.3f}_loss:{:.6f}".format(epoch, testacc, testloss))
 

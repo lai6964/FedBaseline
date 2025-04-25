@@ -29,7 +29,8 @@ def args_parser():
     parser.add_argument('--public_batch_size', type=int, default=256)
     parser.add_argument('--ReLoad', type=str2bool, default=False)
     parser.add_argument('--lrschedule', type=str2bool, default=False)
-    parser.add_argument('--clients_select_ratio',type=float,default=0.3)
+    parser.add_argument('--N_Participants', type=int, default=100)
+    parser.add_argument('--clients_select_ratio',type=float,default=0.1)
     parser.add_argument('--Nets_Name_List',type=list,default=['ResNet18'])
 
     '''    Data Setting    '''
@@ -37,7 +38,6 @@ def args_parser():
     parser.add_argument('--public_len', type=int, default=5000)
     parser.add_argument('--pub_aug', type=str, default='weak')
     parser.add_argument('--N_Class', type=int, default=10)
-    parser.add_argument('--N_Participants', type=int, default=60)
     parser.add_argument('--Dirichlet_beta', type=float, default=0.5)
     parser.add_argument('--DataPart', type=str2bool, default=True)
 
@@ -58,9 +58,23 @@ if __name__ == '__main__':
          transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
          transforms.Normalize((0.485, 0.456, 0.406),
                               (0.229, 0.224, 0.225))])
-    train_dataset = torchvision.datasets.MNIST(root=args.Dataset_Dir, train=True, download=True, transform=Singel_Channel_Nor_TRANSFORM)
-    test_dataset = torchvision.datasets.MNIST(root=args.Dataset_Dir, train=False, download=True, transform=Singel_Channel_Nor_TRANSFORM)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=True)
+
+    CON_TRANSFORM = transforms.Compose(
+        [transforms.RandomCrop(32, padding=4),
+         # transforms.RandomHorizontalFlip(),
+         # transforms.RandomApply([
+         #     transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
+         # ], p=0.8),
+         # transforms.RandomGrayscale(p=0.2),
+         transforms.ToTensor(),
+         transforms.Normalize((0.4802, 0.4480, 0.3975),
+                              (0.2770, 0.2691, 0.2821))])
+
+    # train_dataset = torchvision.datasets.MNIST(root=args.Dataset_Dir, train=True, download=True, transform=Singel_Channel_Nor_TRANSFORM)
+    # test_dataset = torchvision.datasets.MNIST(root=args.Dataset_Dir, train=False, download=True, transform=Singel_Channel_Nor_TRANSFORM)
+    train_dataset = torchvision.datasets.CIFAR10(root=args.Dataset_Dir, train=True, download=True, transform=CON_TRANSFORM)
+    test_dataset = torchvision.datasets.CIFAR10(root=args.Dataset_Dir, train=False, download=True, transform=CON_TRANSFORM)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=True, drop_last=True)
 
     # 使用狄利克雷分布分割数据集
     client_datasets, client_data_loaders = dirichlet_split_noniid(train_dataset, args.Dirichlet_beta, args.N_Participants)
