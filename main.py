@@ -22,7 +22,7 @@ def args_parser():
     parser.add_argument('--CommunicationEpoch',type=int,default=400)
     parser.add_argument('--features_dim',type=int,default=512)
     parser.add_argument('--public_epoch',type=int,default=1)
-    parser.add_argument('--local_epoch',type=int,default=20)
+    parser.add_argument('--local_epoch',type=int,default=10)
     parser.add_argument('--public_lr',type=float,default=0.001)
     parser.add_argument('--local_lr',type=float,default=0.001)
     parser.add_argument('--local_batch_size', type=int, default=256)
@@ -30,7 +30,7 @@ def args_parser():
     parser.add_argument('--ReLoad', type=str2bool, default=False)
     parser.add_argument('--lrschedule', type=str2bool, default=False)
     parser.add_argument('--N_Participants', type=int, default=100)
-    parser.add_argument('--clients_select_ratio',type=float,default=0.1)
+    parser.add_argument('--clients_select_ratio',type=float,default=0.03)
     parser.add_argument('--Nets_Name_List',type=list,default=['ResNet18'])
 
     '''    Data Setting    '''
@@ -79,8 +79,12 @@ if __name__ == '__main__':
     # 使用狄利克雷分布分割数据集
     client_datasets, client_data_loaders = dirichlet_split_noniid(train_dataset, args.Dirichlet_beta, args.N_Participants)
 
-    from algorithms.FedAvg import FedAvg
-    server = FedAvg(args)
+    # from algorithms.FedAvg import FedAvg
+    # server = FedAvg(args)
+
+    from algorithms.FPL import FedPL
+    server = FedPL(args)
+
     server.ini()
     server.run(client_data_loaders,test_loader)
 

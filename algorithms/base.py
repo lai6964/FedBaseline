@@ -35,7 +35,7 @@ class Client(nn.Module):
     def __init__(self, args, id):
         super(Client, self).__init__()
         self.args = args
-        self.idx = id
+        self.id = id
 
     def ini(self, model_name=None):
         self.model = init_model_by_name(model_name)
@@ -75,9 +75,27 @@ class Server(nn.Module):
             else:
                 self.clinets[idx].ini(self.args.Nets_Name_List[idx])
 
-    def global_update(self, clients_list):
-        pass
 
+    def global_update(self, clients_num_choice):
+        global_dict = self.global_model.state_dict()
+        for key in global_dict.keys():
+            global_dict[key] = torch.zeros_like(global_dict[key], dtype=torch.float32)
+
+        for idx in clients_num_choice:
+            client_dict = self.clinets[idx].model.state_dict()
+            for key in client_dict.keys():
+                global_dict[key] += client_dict[key] / len(clients_num_choice)
+        self.global_model.load_state_dict(global_dict)
+
+        for idx in clients_num_choice:
+            for param, target_param in zip(self.clinets[idx].model.parameters(), self.global_model.parameters()):
+                param.data = target_param.data.clone()
+        return None
+
+    def local_update(self, pri_data_loader_list, clients_num_choice):
+        for idx in tqdm(clients_num_choice):
+            self.clinets[idx].train(pri_data_loader_list[idx])
+        return None
 
     def select_clients_by_num(self, M):
         N = self.args.N_Participants
