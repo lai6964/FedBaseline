@@ -18,10 +18,11 @@ def agg_func(protos):
 
 
 class FedProto_Client(Client):
-    def __init__(self, args, id):
-        super(FedProto_Client, self).__init__(args, id)
+    def __init__(self, args, id, train_loader):
+        super(FedProto_Client, self).__init__(args, id, train_loader)
         self.local_protos = {}
         self.mu = 0.01
+        self.train_loader = train_loader
 
     def train(self, train_loader, global_protos):
         self.model.to(self.args.device)
@@ -32,7 +33,7 @@ class FedProto_Client(Client):
         agg_protos_label = {}
         for epoch in range(self.args.local_epoch):
             trainloss = 0
-            for batch_idx, (images, labels) in enumerate(train_loader):
+            for batch_idx, (images, labels) in enumerate(self.train_loader):
                 images = images.to(self.args.device)
                 labels = labels.to(self.args.device)
                 features, outputs = self.model(images)
@@ -67,6 +68,17 @@ class FedProto(Server):
     def __init__(self, args):
         super().__init__(args)
         self.name = 'FedProto'
+
+    def ini(self, client_data_loaders):
+        for idx in range(self.args.N_Participants):
+            self.clients.append(FedProto_Client(self.args, idx, client_data_loaders[idx]))
+            if len(self.args.Nets_Name_List)==1:
+                self.clients[idx].ini(self.args.Nets_Name_List[0])
+            else:
+                self.clients[idx].ini(self.args.Nets_Name_List[idx])
+        self.global_model = copy.deepcopy(self.clients[0].model)
+        self.global_model.to(self.args.device)
+
 
     def proto_aggregation(self):
         # 官方代码和原文不一致，原文应该有考虑每个client每个label的数量，但官方代码直接先客户端算平均标签特征，然后全局再均值
@@ -122,7 +134,7 @@ class FedProto(Server):
         testacc, testloss = 0, 0
         for epoch in range(self.args.CommunicationEpoch):
             self.clients_num_choice = self.select_clients_by_ratio(self.args.clients_select_ratio)
-            self.local_update(pri_data_loader_list, self.clients_num_choice)
+            self.local_update()
             self.global_update()
 
             if 1:  # epoch>10:# and len(test_loader):

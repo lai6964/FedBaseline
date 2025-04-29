@@ -155,11 +155,11 @@ class FedPL(Server):
         self.name = "FPL"
         self.global_protos = []
 
-    def ini(self):
+    def ini(self, client_data_loaders):
         self.global_model = init_model_by_name(self.args.Nets_Name_List[0])
         self.global_model.to(self.args.device)
         for idx in range(self.args.N_Participants):
-            self.clinets.append(FedPL_Client(self.args, idx))
+            self.clinets.append(FedPL_Client(self.args, idx, client_data_loaders[idx]))
             if len(self.args.Nets_Name_List)==1:
                 self.clinets[idx].ini(self.args.Nets_Name_List[0])
             else:

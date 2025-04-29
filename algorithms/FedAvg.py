@@ -7,13 +7,11 @@ class FedAvg(Server):
         self.name = "FedAvg"
 
 
-    def run(self,pri_data_loader_list, test_loader = None):
+    def run(self, test_loader = None):
         testacc, testloss = 0,0
-        # iterator = tqdm(range(self.args.CommunicationEpoch))
-        # for epoch in iterator:
         for epoch in range(self.args.CommunicationEpoch):
             self.clients_num_choice = self.select_clients_by_ratio(self.args.clients_select_ratio)
-            self.global_update(self.clients_num_choice)
+            self.global_update()
             self.local_update()
 
             if 1:#epoch>10:# and len(test_loader):

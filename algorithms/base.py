@@ -65,31 +65,31 @@ class Server(nn.Module):
         super(Server, self).__init__()
         self.args = args
         self.pri_data_loader_list = pri_data_loader_list
-        self.clinets = []
+        self.clients = []
         self.clients_num_choice = []
         self.clients_labelnums = clients_labelnums
 
-    def ini(self):
+    def ini(self, client_data_loaders):
         for idx in range(self.args.N_Participants):
-            self.clinets.append(Client(self.args, idx))
+            self.clients.append(Client(self.args, idx, client_data_loaders[idx]))
             if len(self.args.Nets_Name_List)==1:
-                self.clinets[idx].ini(self.args.Nets_Name_List[0])
+                self.clients[idx].ini(self.args.Nets_Name_List[0])
             else:
-                self.clinets[idx].ini(self.args.Nets_Name_List[idx])
-        self.global_model = copy.deepcopy(self.clinets[0].model)
+                self.clients[idx].ini(self.args.Nets_Name_List[idx])
+        self.global_model = copy.deepcopy(self.clients[0].model)
         self.global_model.to(self.args.device)
 
 
     def global_update(self):
         self.aggregate_nets()
         for idx in self.clients_num_choice:
-            for param, target_param in zip(self.clinets[idx].model.parameters(), self.global_model.parameters()):
+            for param, target_param in zip(self.clients[idx].model.parameters(), self.global_model.parameters()):
                 param.data = target_param.data.clone()
         return None
 
     def local_update(self):
         for idx in tqdm(self.clients_num_choice):
-            self.clinets[idx].train()
+            self.clients[idx].train()
         return None
 
     def aggregate_nets(self, mode='avg'):
@@ -97,19 +97,21 @@ class Server(nn.Module):
         for key in global_dict.keys():
             global_dict[key] = torch.zeros_like(global_dict[key], dtype=torch.float32)
 
+
+        clients = [self.clients[idx] for idx in self.clients_num_choice]
         if mode == 'avg':
-            for idx in self.clients_num_choice:
-                client_dict = self.clinets[idx].model.state_dict()
-                for key in client_dict.keys():
-                    global_dict[key] += client_dict[key] / len(self.clients_num_choice)
+            parti_num = len(self.clients_num_choice)
+            ratios = [1 / parti_num for _ in range(parti_num)]
         elif mode == 'weights':
-            datanum_using = sum([sum(self.clients_labelnums[idx]) for idx in self.clients_num_choice])
-            for idx in self.clients_num_choice:
-                client_dict = self.clinets[idx].model.state_dict()
-                for key in client_dict.keys():
-                    global_dict[key] += client_dict[key] * sum(self.clients_labelnums[idx]) / datanum_using
+            clients_datanums = [sum(self.clients_labelnums[idx]) for idx in self.clients_num_choice]
+            ratios = clients_datanums/sum(clients_datanums)
         else:
             raise ValueError("未定义的模型聚合方式{}".format(mode))
+
+        for ratio, client in zip(ratios, clients):
+            client_dict = client.model.state_dict()
+            for key in client_dict.keys():
+                global_dict[key] += client_dict[key] * ratio
 
         self.global_model.load_state_dict(global_dict)
         return None

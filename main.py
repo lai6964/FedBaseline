@@ -94,7 +94,7 @@ if __name__ == '__main__':
     from algorithms.FPL import FedPL
     server = FedPL(args, client_data_loaders, clients_labelnums)
 
-    server.ini()
+    server.ini(client_data_loaders)
     server.run(test_loader)
 
 
