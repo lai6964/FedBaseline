@@ -28,10 +28,11 @@ def dirichlet_split_noniid(train_dataset, alpha, n_clients):
 if __name__ == '__main__':
     from data_loader import *
     import torchvision
+    import numpy as np
     # 加载 MNIST 数据集
     transform = transforms.Compose([transforms.ToTensor()])
-    # train_dataset = MNIST(root='../../Dataset', train=True, download=True, transform=transform)
-    train_dataset = torchvision.datasets.CIFAR10(root='../../Dataset', train=True, download=True, transform=transform)
+    train_dataset = MNIST(root='../../Dataset', train=True, download=True, transform=transform)
+    # train_dataset = torchvision.datasets.CIFAR10(root='../../Dataset', train=True, download=True, transform=transform)
 
     # 设置参数
     n_clients = 10  # 客户端数量
@@ -40,11 +41,20 @@ if __name__ == '__main__':
     # 使用狄利克雷分布分割数据集
     client_datasets, client_data_loaders = dirichlet_split_noniid(train_dataset, alpha, n_clients)
 
-
+    clients_labelnums = []
     # 打印每个客户端的数据分布情况
-    for i, dataset in enumerate(client_datasets):
-        labels = [train_dataset.targets[idx].item() for idx in dataset.indices]
-        print(f"Client {i} has {len(labels)} samples with distribution: {torch.bincount(torch.tensor(labels))}")
+    for i in range(n_clients):
+        dataset = client_datasets[i]
+        datasetloader = client_data_loaders[i]
+        labels = [train_dataset.targets[idx] for idx in dataset.indices]
+        print(f"Client {i} has {len(labels)} samples with distribution: {np.array(torch.bincount(torch.tensor(labels)))},"
+              f" total {len(dataset)}=={len(datasetloader.dataset.indices)}")
 
+        clients_labelnums.append(torch.bincount(torch.tensor(labels)).tolist())
+    print(clients_labelnums)
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     for batch_idx, (images, labels) in enumerate(client_data_loaders[0]):
+        labels.to(device)
+        a = labels[i].item()
         print(images.shape)

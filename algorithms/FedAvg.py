@@ -12,13 +12,13 @@ class FedAvg(Server):
         # iterator = tqdm(range(self.args.CommunicationEpoch))
         # for epoch in iterator:
         for epoch in range(self.args.CommunicationEpoch):
-            clients_num_choice = self.select_clients_by_ratio(self.args.clients_select_ratio)
-            self.global_update(clients_num_choice)
-            self.local_update(pri_data_loader_list, clients_num_choice)
+            self.clients_num_choice = self.select_clients_by_ratio(self.args.clients_select_ratio)
+            self.global_update(self.clients_num_choice)
+            self.local_update()
 
             if 1:#epoch>10:# and len(test_loader):
                 testloss, testacc = eval_one(self.global_model, test_loader, self.args.device)
-                with open("FedAvg_result3.txt", 'a+') as fp:
+                with open("FedAvg_result.txt", 'a+') as fp:
                     fp.writelines("\nepoch_{}_acc:{:.3f}_loss:{:.6f}".format(epoch, testacc, testloss))
             print("epoch_{}_acc:{:.3f}_loss:{:.6f}".format(epoch, testacc, testloss))
 
