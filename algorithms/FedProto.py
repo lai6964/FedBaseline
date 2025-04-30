@@ -1,25 +1,8 @@
-from algorithms.base import *  # Client, Server
-
-
-def eval_one(net, dataloader, device):
-    net = net.to(device)
-    net.eval()
-    with torch.no_grad():
-        correct = 0
-        total = 0
-        losstotal = 0
-        for images, labels in dataloader:
-            images = images.to(device)
-            labels = labels.to(device)
-            _, outputs = net(images)
-            loss = torch.nn.CrossEntropyLoss(reduction='mean')(outputs, labels.long())
-            losstotal += loss.item()
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-        acc = 100 * correct / total
-        lossavg = losstotal/len(dataloader)
-    return lossavg, acc
+"""
+《FedProto: Federated Prototype Learning across Heterogeneous Clients》AAAI2022
+每个客户端算类别原型，计算类别的全局原型（这里原文和代码不同，原本有客户端上类别样本数量的权重，代码直接取了平均）
+"""
+from algorithms.base import *
 
 def agg_func(protos):
     """
@@ -37,18 +20,12 @@ def agg_func(protos):
 
     return protos
 
-
-class FedProto_Client(Client):
+class FedProto_Client(ClientBase):
     def __init__(self, args, id, train_loader):
-        super(FedProto_Client, self).__init__(args, id, train_loader)
+        super().__init__(args, id, train_loader)
         self.local_protos = {}
         self.mu = 0.01
-        self.train_loader = train_loader
 
-    def ini(self, model_name=None):
-        from backbone.init_fl_model import get_model_by_name
-        self.model = get_model_by_name('ResNet18')
-        self.model.to(self.args.device)
 
     def train(self, global_protos):
         self.model.to(self.args.device)
@@ -90,10 +67,11 @@ class FedProto_Client(Client):
         self.local_protos = agg_func(agg_protos_label)
 
 
-class FedProto(Server):
-    def __init__(self, args, pri_data_loader_list, clients_labelnums):
-        super().__init__(args, pri_data_loader_list, clients_labelnums)
+class FedProto_Server(ServerBase):
+    def __init__(self, args):
+        super().__init__(args)
         self.name = 'FedProto'
+        self.aggregate_mode = 'weights'
         self.global_protos = []
 
     def ini(self, client_data_loaders):
@@ -104,7 +82,7 @@ class FedProto(Server):
             else:
                 self.clients[idx].ini(self.args.Nets_Name_List[idx])
         self.global_model = copy.deepcopy(self.clients[0].model)
-        self.global_model.to(self.args.device)
+        self.global_model.to(self.device)
 
 
     def proto_aggregation(self):
@@ -153,23 +131,9 @@ class FedProto(Server):
         return None
 
     def global_update(self):
-        self.aggregate_nets(mode="weights")
+        self.aggregate_nets()
         self.global_protos = self.proto_aggregation()
         for idx in self.clients_num_choice:
             for param, target_param in zip(self.clients[idx].model.parameters(), self.global_model.parameters()):
                 param.data = target_param.data.clone()
-        return None
-
-    def run(self, test_loader=None):
-        testacc, testloss = 0, 0
-        for epoch in range(self.args.CommunicationEpoch):
-            self.clients_num_choice = self.select_clients_by_ratio(self.args.clients_select_ratio)
-            self.local_update()
-            self.global_update()
-
-            if 1:  # epoch>10:# and len(test_loader):
-                testloss, testacc = eval_one(self.global_model, test_loader, self.args.device)
-                with open("{}_result.txt".format(self.name), 'a+') as fp:
-                    fp.writelines("\nepoch_{}_acc:{:.3f}_loss:{:.6f}".format(epoch, testacc, testloss))
-            print("epoch_{}_acc:{:.3f}_loss:{:.6f}".format(epoch, testacc, testloss))
         return None

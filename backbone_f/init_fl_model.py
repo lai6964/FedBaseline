@@ -1,8 +1,9 @@
-from backbone.ResNet import ResNet10, ResNet12, ResNet18, ResNet20, ResNet34
-from backbone.googlenet import GoogLeNet, Inception
-from backbone.mobilnet_v2 import MobileNetV2
-from backbone.efficientnet import EfficientNetB0
-from backbone.shufflenet import ShuffleNetG2
+import torch
+from backbone_f.ResNet import ResNet10, ResNet12, ResNet18, ResNet20, ResNet34
+from backbone_f.googlenet import GoogLeNet, Inception
+from backbone_f.mobilnet_v2 import MobileNetV2
+from backbone_f.efficientnet import EfficientNetB0
+from backbone_f.shufflenet import ShuffleNetG2
 
 
 def get_model_by_name(model_name,nclasses=10):

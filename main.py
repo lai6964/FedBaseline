@@ -1,10 +1,7 @@
 import argparse
 import torch, torchvision
-from backbone.ResNet import ResNet18
 from utils import *
-from data_utils.data_loader import MyDigits
 from data_utils.split_dirichlet import dirichlet_split_noniid
-from  algorithms.base import Client, Server
 
 
 def args_parser():
@@ -19,7 +16,7 @@ def args_parser():
 
 
     '''    Traning Setting    '''
-    parser.add_argument('--CommunicationEpoch',type=int,default=400)
+    parser.add_argument('--CommunicationEpoch',type=int,default=1000)
     parser.add_argument('--features_dim',type=int,default=512)
     parser.add_argument('--public_epoch',type=int,default=1)
     parser.add_argument('--local_epoch',type=int,default=10)
@@ -87,12 +84,13 @@ if __name__ == '__main__':
         print(f"Client {i} has {len(labels)} samples with distribution: {torch.bincount(torch.tensor(labels))},"
               f" total {len(dataset)}=={len(datasetloader.dataset.indices)}")
         clients_labelnums.append(torch.bincount(torch.tensor(labels)).tolist())
+    args.clients_labelnums = clients_labelnums
 
-    # from algorithms.FedAvg import FedAvg
-    # server = FedAvg(args, client_data_loaders, clients_labelnums)
+    from algorithms.FedAvg import FedAvg_Server
+    server = FedAvg_Server(args)
 
-    from algorithms.FedProto import FedProto
-    server = FedProto(args, client_data_loaders, clients_labelnums)
+    # from algorithms.FedProto import FedProto
+    # server = FedProto(args, client_data_loaders, clients_labelnums)
 
     # from algorithms.FPL import FedPL
     # server = FedPL(args, client_data_loaders, clients_labelnums)

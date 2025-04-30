@@ -1,6 +1,5 @@
-from pyexpat import features
-
 from algorithms.base import *#Client, Server
+from algorithms.FedProto import FedProto_Server, FedProto_Client, agg_func
 import torch
 import numpy as np
 from sklearn import metrics
@@ -18,78 +17,44 @@ except Exception as e:
 
 ANN_THRESHOLD = 70000
 
-def init_model_by_name(model_name):
-    from backbone.init_fl_model import get_model_by_name
-    return get_model_by_name(model_name)
-def eval_one(net, dataloader, device):
-    net = net.to(device)
-    net.eval()
-    with torch.no_grad():
-        correct = 0
-        total = 0
-        losstotal = 0
-        for images, labels in dataloader:
-            images = images.to(device)
-            labels = labels.to(device)
-            features, outputs = net(images)
-            loss = torch.nn.CrossEntropyLoss(reduction='mean')(outputs, labels.long())
-            losstotal += loss.item()
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-        acc = 100 * correct / total
-        lossavg = losstotal/len(dataloader)
-    return lossavg, acc
-
-class FedPL_Client(Client):
-    def __init__(self, args, id):
-        super(FedPL_Client, self).__init__(args, id)
-        self.global_protos = []
-        self.local_protos = {}
-        self.infoNCET = 0.02
-
-    def ini(self, model_name=None):
-        self.model = init_model_by_name(model_name)
-        self.model.to(self.args.device)
-
-    def train(self, train_loader):
-        net = self.model.to(self.args.device)
+class FPL_Client(FedProto_Client):
+    def train(self, global_protos):
+        net = self.model.to(self.device)
         optimizer = optim.SGD(net.parameters(), lr=self.args.local_lr, momentum=0.9, weight_decay=1e-5)
         criterion = nn.CrossEntropyLoss()
-        criterion.to(self.args.device)
+        criterion.to(self.device)
 
-        if len(self.global_protos) != 0:
-            all_global_protos_keys = np.array(list(self.global_protos.keys()))
+        if len(global_protos) != 0:
+            all_global_protos_keys = np.array(list(global_protos.keys()))
             all_f = []
             mean_f = []
             for protos_key in all_global_protos_keys:
-                temp_f = self.global_protos[protos_key]
-                temp_f = torch.cat(temp_f, dim=0).to(self.args.device)
+                temp_f = global_protos[protos_key]
+                temp_f = torch.cat(temp_f, dim=0).to(self.device)
                 all_f.append(temp_f.cpu())
                 mean_f.append(torch.mean(temp_f, dim=0).cpu())
             all_f = [item.detach() for item in all_f]
             mean_f = [item.detach() for item in mean_f]
 
-        iterator = tqdm(range(self.args.local_epoch))
-        for iter in iterator:
+        for iter in range(self.local_epoch):
             agg_protos_label = {}
-            for batch_idx, (images, labels) in enumerate(train_loader):
+            for batch_idx, (images, labels) in enumerate(self.train_loader):
                 optimizer.zero_grad()
 
-                images = images.to(self.args.device)
-                labels = labels.to(self.args.device)
+                images = images.to(self.device)
+                labels = labels.to(self.device)
                 outputs, features = net(images)
 
                 lossCE = criterion(outputs, labels)
 
-                if len(self.global_protos) == 0:
+                if len(global_protos) == 0:
                     loss_InfoNCE = 0 * lossCE
                 else:
                     i = 0
                     loss_InfoNCE = None
 
                     for label in labels:
-                        if label.item() in self.global_protos.keys():
+                        if label.item() in global_protos.keys():
                             f_now = features[i].unsqueeze(0)
                             loss_instance = self.hierarchical_info_loss(f_now, label, all_f, mean_f, all_global_protos_keys)
 
@@ -116,11 +81,11 @@ class FedPL_Client(Client):
         self.local_protos = agg_func(agg_protos_label)
 
     def hierarchical_info_loss(self, f_now, label, all_f, mean_f, all_global_protos_keys):
-        f_pos = np.array(all_f)[all_global_protos_keys == label.item()][0].to(self.args.device)
-        f_neg = torch.cat(list(np.array(all_f)[all_global_protos_keys != label.item()])).to(self.args.device)
+        f_pos = np.array(all_f)[all_global_protos_keys == label.item()][0].to(self.device)
+        f_neg = torch.cat(list(np.array(all_f)[all_global_protos_keys != label.item()])).to(self.device)
         xi_info_loss = self.calculate_infonce(f_now, f_pos, f_neg)
 
-        mean_f_pos = np.array(mean_f)[all_global_protos_keys == label.item()][0].to(self.args.device)
+        mean_f_pos = np.array(mean_f)[all_global_protos_keys == label.item()][0].to(self.device)
         mean_f_pos = mean_f_pos.view(1, -1)
         # mean_f_neg = torch.cat(list(np.array(mean_f)[all_global_protos_keys != label.item()]), dim=0).to(self.device)
         # mean_f_neg = mean_f_neg.view(9, -1)
@@ -149,26 +114,27 @@ class FedPL_Client(Client):
         return infonce_loss
 
 
-class FedPL(Server):
+class FPL_Server(FedProto_Server):
     def __init__(self, args):
-        super(FedPL,self).__init__(args)
+        super(FPL_Server, self).__init__(args)
         self.name = "FPL"
         self.global_protos = []
 
     def ini(self, client_data_loaders):
-        self.global_model = init_model_by_name(self.args.Nets_Name_List[0])
-        self.global_model.to(self.args.device)
         for idx in range(self.args.N_Participants):
-            self.clinets.append(FedPL_Client(self.args, idx, client_data_loaders[idx]))
+            self.clinets.append(FPL_Client(self.args, idx, client_data_loaders[idx]))
             if len(self.args.Nets_Name_List)==1:
                 self.clinets[idx].ini(self.args.Nets_Name_List[0])
             else:
                 self.clinets[idx].ini(self.args.Nets_Name_List[idx])
+        self.global_model = copy.deepcopy(self.clinets[0])
+        self.global_model.to(self.args.device)
 
-    def proto_aggregation(self, clients_num_choice):
+    def proto_aggregation(self):
         agg_protos_label = dict()
-        for idx in clients_num_choice:
-            local_protos = self.clinets[idx].local_protos
+        clients = [self.clients[idx] for idx in self.clients_num_choice]
+        for client in clients:
+            local_protos = client.local_protos
             for label in local_protos.keys():
                 if label in agg_protos_label:
                     agg_protos_label[label].append(local_protos[label])
@@ -204,40 +170,7 @@ class FedPL(Server):
         return agg_protos_label
 
 
-    def run(self, pri_data_loader_list, test_loader = None):
-        testacc, testloss = 0,0
-        for epoch in range(self.args.CommunicationEpoch):
-            clients_num_choice = self.select_clients_by_ratio(self.args.clients_select_ratio)
-            self.local_update(pri_data_loader_list, clients_num_choice)
-            self.global_update(clients_num_choice)
-            self.global_protos = self.proto_aggregation(clients_num_choice)
 
-            if 1:#epoch>10:# and len(test_loader):
-                testloss, testacc = eval_one(self.global_model, test_loader, self.args.device)
-                with open("{}_result.txt".format(self.name), 'a+') as fp:
-                    fp.writelines("\nepoch_{}_acc:{:.3f}_loss:{:.6f}".format(epoch, testacc, testloss))
-            print("epoch_{}_acc:{:.3f}_loss:{:.6f}".format(epoch, testacc, testloss))
-
-        return None
-
-
-
-
-def agg_func(protos):
-    """
-    Returns the average of the weights.
-    """
-
-    for [label, proto_list] in protos.items():
-        if len(proto_list) > 1:
-            proto = 0 * proto_list[0].data
-            for i in proto_list:
-                proto += i.data
-            protos[label] = proto / len(proto_list)
-        else:
-            protos[label] = proto_list[0]
-
-    return protos
 
 
 def clust_rank(mat, initial_rank=None, distance='cosine'):

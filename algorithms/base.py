@@ -7,51 +7,33 @@ import torch.optim as optim
 from tqdm import tqdm
 import numpy as np
 import copy
+from datetime import datetime
 
-def init_model_by_name(name):
-    # rewrite soon
-    return torchvision.models.resnet18()
-def eval_one(net, dataloader, device):
-    net = net.to(device)
-    net.eval()
-    with torch.no_grad():
-        correct = 0
-        total = 0
-        losstotal = 0
-        for images, labels in dataloader:
-            images = images.to(device)
-            labels = labels.to(device)
-            outputs = net(images)
-            loss = torch.nn.CrossEntropyLoss(reduction='mean')(outputs, labels.long())
-            losstotal += loss.item()
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-        acc = 100 * correct / total
-        lossavg = losstotal/len(dataloader)
-    return lossavg, acc
 
-class Client(nn.Module):
+class ClientBase(nn.Module):
     def __init__(self, args, id, train_loader):
-        super(Client, self).__init__()
+        super(ClientBase, self).__init__()
         self.args = args
         self.id = id
         self.train_loader = train_loader
+        self.device = args.device
+        self.local_epoch = args.local_epoch
 
     def ini(self, model_name=None):
-        self.model = torchvision.models.resnet18()
-        self.model.to(self.args.device)
+        from backbone_f.init_fl_model import get_model_by_name
+        self.model = get_model_by_name(model_name)
+        self.model.to(self.device)
 
     def train(self):
-        self.model.to(self.args.device)
+        self.model.to(self.device)
         optimizer = optim.Adam(self.model.parameters(), lr=self.args.local_lr, weight_decay=1e-5)
 
         self.model.train()
-        for epoch in range(self.args.local_epoch):
+        for epoch in range(self.local_epoch):
             trainloss = 0
             for batch_idx, (images, labels) in enumerate(self.train_loader):
-                images = images.to(self.args.device)
-                labels = labels.to(self.args.device)
+                images = images.to(self.device)
+                labels = labels.to(self.device)
                 outputs = self.model(images)
                 loss = nn.CrossEntropyLoss()(outputs, labels.long())
                 trainloss += loss.item()
@@ -60,25 +42,59 @@ class Client(nn.Module):
                 optimizer.step()
 
 
-class Server(nn.Module):
-    def __init__(self, args, pri_data_loader_list, clients_labelnums):
-        super(Server, self).__init__()
+class ServerBase(nn.Module):
+
+    def __init__(self, args):
+        super(ServerBase, self).__init__()
         self.args = args
-        self.pri_data_loader_list = pri_data_loader_list
         self.clients = []
         self.clients_num_choice = []
-        self.clients_labelnums = clients_labelnums
+        self.clients_labelnums = args.clients_labelnums
+        self.aggregate_mode = 'avg'
+        self.device = args.device
 
     def ini(self, client_data_loaders):
         for idx in range(self.args.N_Participants):
-            self.clients.append(Client(self.args, idx, client_data_loaders[idx]))
+            self.clients.append(ClientBase(self.args, idx, client_data_loaders[idx]))
             if len(self.args.Nets_Name_List)==1:
                 self.clients[idx].ini(self.args.Nets_Name_List[0])
             else:
                 self.clients[idx].ini(self.args.Nets_Name_List[idx])
         self.global_model = copy.deepcopy(self.clients[0].model)
-        self.global_model.to(self.args.device)
+        self.global_model.to(self.device)
 
+    def run(self, test_loader = None):
+        for epoch in range(self.args.CommunicationEpoch):
+            self.clients_num_choice = self.select_clients_by_ratio(self.args.clients_select_ratio)
+            self.local_update()
+            self.global_update()
+
+            if test_loader is not None:
+                testloss, testacc = self.eval_one(test_loader)
+                with open("{}_result.txt".format(self.name), 'a+') as fp:
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    fp.writelines("\n[{}]epoch_{}_acc:{:.3f}_loss:{:.6f}".format(timestamp, epoch, testacc, testloss))
+        return None
+
+    def eval_one(self, dataloader):
+        net = self.global_model.to(self.device)
+        net.eval()
+        with torch.no_grad():
+            correct = 0
+            total = 0
+            losstotal = 0
+            for images, labels in dataloader:
+                images = images.to(self.device)
+                labels = labels.to(self.device)
+                _, outputs = net(images)
+                loss = torch.nn.CrossEntropyLoss(reduction='mean')(outputs, labels.long())
+                losstotal += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+            acc = 100 * correct / total
+            lossavg = losstotal / len(dataloader)
+        return lossavg, acc
 
     def global_update(self):
         self.aggregate_nets()
@@ -92,22 +108,21 @@ class Server(nn.Module):
             self.clients[idx].train()
         return None
 
-    def aggregate_nets(self, mode='avg'):
+    def aggregate_nets(self):
         global_dict = self.global_model.state_dict()
         for key in global_dict.keys():
             global_dict[key] = torch.zeros_like(global_dict[key], dtype=torch.float32)
 
 
         clients = [self.clients[idx] for idx in self.clients_num_choice]
-        if mode == 'avg':
+        if self.aggregate_mode == 'avg':
             parti_num = len(self.clients_num_choice)
             ratios = [1 / parti_num for _ in range(parti_num)]
-        elif mode == 'weights':
+        elif self.aggregate_mode == 'weights':
             clients_datanums = [sum(self.clients_labelnums[idx]) for idx in self.clients_num_choice]
-            # total_datanums = sum(clients_datanums)
             ratios = [datanums/sum(clients_datanums) for datanums in clients_datanums]
         else:
-            raise ValueError("未定义的模型聚合方式{}".format(mode))
+            raise ValueError("未定义的模型聚合方式{}".format(self.aggregate_mode))
 
         for ratio, client in zip(ratios, clients):
             client_dict = client.model.state_dict()

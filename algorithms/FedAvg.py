@@ -1,28 +1,23 @@
 from algorithms.base import *
 
+class FedAvg_Client(ClientBase):
+    pass
 
-class FedAvg(Server):
-    def __init__(self, args, pri_data_loader_list, clients_labelnums):
-        super(FedAvg,self).__init__(args, pri_data_loader_list, clients_labelnums)
+
+class FedAvg_Server(ServerBase):
+    def __init__(self, args):
+        super().__init__(args)
         self.name = "FedAvg"
 
-
-    def run(self, test_loader = None):
-        testacc, testloss = 0,0
-        for epoch in range(self.args.CommunicationEpoch):
-            self.clients_num_choice = self.select_clients_by_ratio(self.args.clients_select_ratio)
-            self.global_update()
-            self.local_update()
-
-            if 1:#epoch>10:# and len(test_loader):
-                testloss, testacc = eval_one(self.global_model, test_loader, self.args.device)
-                with open("FedAvg_result.txt", 'a+') as fp:
-                    fp.writelines("\nepoch_{}_acc:{:.3f}_loss:{:.6f}".format(epoch, testacc, testloss))
-            print("epoch_{}_acc:{:.3f}_loss:{:.6f}".format(epoch, testacc, testloss))
-
-
-            # iterator.desc = "Epoch %d testloss = %0.6f testacc = %.3f" % (epoch, testloss, testacc)
-
+    def ini(self, client_data_loaders):
+        for idx in range(self.args.N_Participants):
+            self.clients.append(FedAvg_Client(self.args, idx, client_data_loaders[idx]))
+            if len(self.args.Nets_Name_List)==1:
+                self.clients[idx].ini(self.args.Nets_Name_List[0])
+            else:
+                self.clients[idx].ini(self.args.Nets_Name_List[idx])
+        self.global_model = copy.deepcopy(self.clients[0].model)
+        self.global_model.to(self.device)
 
 
 
