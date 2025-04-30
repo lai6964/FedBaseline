@@ -1,5 +1,26 @@
 from algorithms.base import *  # Client, Server
 
+
+def eval_one(net, dataloader, device):
+    net = net.to(device)
+    net.eval()
+    with torch.no_grad():
+        correct = 0
+        total = 0
+        losstotal = 0
+        for images, labels in dataloader:
+            images = images.to(device)
+            labels = labels.to(device)
+            _, outputs = net(images)
+            loss = torch.nn.CrossEntropyLoss(reduction='mean')(outputs, labels.long())
+            losstotal += loss.item()
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+        acc = 100 * correct / total
+        lossavg = losstotal/len(dataloader)
+    return lossavg, acc
+
 def agg_func(protos):
     """
     Returns the average of the weights.
@@ -24,7 +45,12 @@ class FedProto_Client(Client):
         self.mu = 0.01
         self.train_loader = train_loader
 
-    def train(self, train_loader, global_protos):
+    def ini(self, model_name=None):
+        from backbone.init_fl_model import get_model_by_name
+        self.model = get_model_by_name('ResNet18')
+        self.model.to(self.args.device)
+
+    def train(self, global_protos):
         self.model.to(self.args.device)
         # optimizer = optim.SGD(net.parameters(), lr=self.args.local_lr, momentum=0.9, weight_decay=1e-5)
         optimizer = optim.Adam(self.model.parameters(), lr=self.args.local_lr, weight_decay=1e-5)
@@ -55,7 +81,7 @@ class FedProto_Client(Client):
                 loss.backward()
                 optimizer.step()
 
-                if epoch == self.local_epoch-1:
+                if epoch == self.args.local_epoch-1:
                     for i in range(len(labels)):
                         if labels[i].item() in agg_protos_label:
                             agg_protos_label[labels[i].item()].append(features[i,:])
@@ -65,9 +91,10 @@ class FedProto_Client(Client):
 
 
 class FedProto(Server):
-    def __init__(self, args):
-        super().__init__(args)
+    def __init__(self, args, pri_data_loader_list, clients_labelnums):
+        super().__init__(args, pri_data_loader_list, clients_labelnums)
         self.name = 'FedProto'
+        self.global_protos = []
 
     def ini(self, client_data_loaders):
         for idx in range(self.args.N_Participants):
@@ -85,7 +112,7 @@ class FedProto(Server):
         # 这个函数是官方代码copy过来的
         agg_protos_label = dict()
         for idx in self.clients_num_choice:
-            local_protos = self.clinets[idx].local_protos
+            local_protos = self.clients[idx].local_protos
             for label in local_protos.keys():
                 if label in agg_protos_label:
                     agg_protos_label[label].append(local_protos[label])
@@ -120,17 +147,20 @@ class FedProto(Server):
                 agg_protos_label[label] = [agg_protos_label[label]]
         return agg_protos_label
 
-
+    def local_update(self):
+        for idx in tqdm(self.clients_num_choice):
+            self.clients[idx].train(self.global_protos)
+        return None
 
     def global_update(self):
         self.aggregate_nets(mode="weights")
         self.global_protos = self.proto_aggregation()
         for idx in self.clients_num_choice:
-            for param, target_param in zip(self.clinets[idx].model.parameters(), self.global_model.parameters()):
+            for param, target_param in zip(self.clients[idx].model.parameters(), self.global_model.parameters()):
                 param.data = target_param.data.clone()
         return None
 
-    def run(self, pri_data_loader_list, test_loader=None):
+    def run(self, test_loader=None):
         testacc, testloss = 0, 0
         for epoch in range(self.args.CommunicationEpoch):
             self.clients_num_choice = self.select_clients_by_ratio(self.args.clients_select_ratio)
@@ -139,7 +169,7 @@ class FedProto(Server):
 
             if 1:  # epoch>10:# and len(test_loader):
                 testloss, testacc = eval_one(self.global_model, test_loader, self.args.device)
-                with open("{}}_result.txt".format(self.name), 'a+') as fp:
+                with open("{}_result.txt".format(self.name), 'a+') as fp:
                     fp.writelines("\nepoch_{}_acc:{:.3f}_loss:{:.6f}".format(epoch, testacc, testloss))
             print("epoch_{}_acc:{:.3f}_loss:{:.6f}".format(epoch, testacc, testloss))
         return None

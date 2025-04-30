@@ -89,10 +89,13 @@ if __name__ == '__main__':
         clients_labelnums.append(torch.bincount(torch.tensor(labels)).tolist())
 
     # from algorithms.FedAvg import FedAvg
-    # server = FedAvg(args)
+    # server = FedAvg(args, client_data_loaders, clients_labelnums)
 
-    from algorithms.FPL import FedPL
-    server = FedPL(args, client_data_loaders, clients_labelnums)
+    from algorithms.FedProto import FedProto
+    server = FedProto(args, client_data_loaders, clients_labelnums)
+
+    # from algorithms.FPL import FedPL
+    # server = FedPL(args, client_data_loaders, clients_labelnums)
 
     server.ini(client_data_loaders)
     server.run(test_loader)

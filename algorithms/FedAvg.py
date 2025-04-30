@@ -2,8 +2,8 @@ from algorithms.base import *
 
 
 class FedAvg(Server):
-    def __init__(self, args):
-        super(FedAvg,self).__init__(args)
+    def __init__(self, args, pri_data_loader_list, clients_labelnums):
+        super(FedAvg,self).__init__(args, pri_data_loader_list, clients_labelnums)
         self.name = "FedAvg"
 
 

@@ -104,7 +104,8 @@ class Server(nn.Module):
             ratios = [1 / parti_num for _ in range(parti_num)]
         elif mode == 'weights':
             clients_datanums = [sum(self.clients_labelnums[idx]) for idx in self.clients_num_choice]
-            ratios = clients_datanums/sum(clients_datanums)
+            # total_datanums = sum(clients_datanums)
+            ratios = [datanums/sum(clients_datanums) for datanums in clients_datanums]
         else:
             raise ValueError("未定义的模型聚合方式{}".format(mode))
 
