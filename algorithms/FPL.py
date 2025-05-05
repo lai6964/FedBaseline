@@ -18,6 +18,14 @@ except Exception as e:
 ANN_THRESHOLD = 70000
 
 class FPL_Client(FedProto_Client):
+    def __init__(self, args, id, train_loader):
+        super().__init__(args, id, train_loader)
+        self.infoNCET = 0.02
+
+    def ini(self, model_name=None):
+        from backbone_f.init_fl_model import get_model_by_name
+        self.model = get_model_by_name(model_name)
+        self.model.to(self.device)
     def train(self, global_protos):
         net = self.model.to(self.device)
         optimizer = optim.SGD(net.parameters(), lr=self.args.local_lr, momentum=0.9, weight_decay=1e-5)
@@ -43,7 +51,7 @@ class FPL_Client(FedProto_Client):
 
                 images = images.to(self.device)
                 labels = labels.to(self.device)
-                outputs, features = net(images)
+                features, outputs = net(images)
 
                 lossCE = criterion(outputs, labels)
 
@@ -68,7 +76,6 @@ class FPL_Client(FedProto_Client):
 
                 loss = lossCE + loss_InfoNCE
                 loss.backward()
-                iterator.desc = "Local Pariticipant %d CE = %0.3f,InfoNCE = %0.3f" % (self.id, lossCE, loss_InfoNCE)
                 optimizer.step()
 
                 if iter == self.args.local_epoch - 1:
@@ -81,14 +88,21 @@ class FPL_Client(FedProto_Client):
         self.local_protos = agg_func(agg_protos_label)
 
     def hierarchical_info_loss(self, f_now, label, all_f, mean_f, all_global_protos_keys):
-        f_pos = np.array(all_f)[all_global_protos_keys == label.item()][0].to(self.device)
-        f_neg = torch.cat(list(np.array(all_f)[all_global_protos_keys != label.item()])).to(self.device)
-        xi_info_loss = self.calculate_infonce(f_now, f_pos, f_neg)
+        # 官方代码这里有问题，没法运行，按照原文说法修改了一下，
+        # f_pos = np.array(all_f)[all_global_protos_keys == label.item()][0].to(self.device)
+        # f_neg = torch.cat(list(np.array(all_f)[all_global_protos_keys != label.item()])).to(self.device)
+        # xi_info_loss = self.calculate_infonce(f_now, f_pos, f_neg)
+        #
+        # mean_f_pos = np.array(mean_f)[all_global_protos_keys == label.item()][0].to(self.device)
+        # mean_f_pos = mean_f_pos.view(1, -1)
+        # # mean_f_neg = torch.cat(list(np.array(mean_f)[all_global_protos_keys != label.item()]), dim=0).to(self.device)
+        # # mean_f_neg = mean_f_neg.view(9, -1)
 
-        mean_f_pos = np.array(mean_f)[all_global_protos_keys == label.item()][0].to(self.device)
-        mean_f_pos = mean_f_pos.view(1, -1)
-        # mean_f_neg = torch.cat(list(np.array(mean_f)[all_global_protos_keys != label.item()]), dim=0).to(self.device)
-        # mean_f_neg = mean_f_neg.view(9, -1)
+        f_idx = np.where(all_global_protos_keys == label.item())[0][0]
+        f_pos = all_f[f_idx].to(self.device)
+        f_neg = torch.cat([f for i, f in enumerate(all_f) if i != f_idx]).to(self.device)
+        xi_info_loss = self.calculate_infonce(f_now, f_pos, f_neg)
+        mean_f_pos = mean_f[f_idx].to(self.device)
 
         loss_mse = nn.MSELoss()
         cu_info_loss = loss_mse(f_now, mean_f_pos)
@@ -118,17 +132,16 @@ class FPL_Server(FedProto_Server):
     def __init__(self, args):
         super(FPL_Server, self).__init__(args)
         self.name = "FPL"
-        self.global_protos = []
 
     def ini(self, client_data_loaders):
         for idx in range(self.args.N_Participants):
-            self.clinets.append(FPL_Client(self.args, idx, client_data_loaders[idx]))
+            self.clients.append(FPL_Client(self.args, idx, client_data_loaders[idx]))
             if len(self.args.Nets_Name_List)==1:
-                self.clinets[idx].ini(self.args.Nets_Name_List[0])
+                self.clients[idx].ini(self.args.Nets_Name_List[0])
             else:
-                self.clinets[idx].ini(self.args.Nets_Name_List[idx])
-        self.global_model = copy.deepcopy(self.clinets[0])
-        self.global_model.to(self.args.device)
+                self.clients[idx].ini(self.args.Nets_Name_List[idx])
+        self.global_model = copy.deepcopy(self.clients[0].model)
+        self.global_model.to(self.device)
 
     def proto_aggregation(self):
         agg_protos_label = dict()
@@ -168,6 +181,7 @@ class FPL_Server(FedProto_Server):
                 agg_protos_label[label] = [proto_list[0].data]
 
         return agg_protos_label
+
 
 
 

@@ -11,7 +11,7 @@ def args_parser():
     parser.add_argument('--Seed',type=int,default=42)
     parser.add_argument('--Dataset_Dir',type=str,default='../Dataset/')
     parser.add_argument('--Model_Path',type=str,default='Model_Storage')
-    parser.add_argument('--model', type=str, default='SOLO', help='Model name.')
+    parser.add_argument('--model', type=str, default='FPL', help='Model name.')
     parser.add_argument('--Scenario',type=str,default='MNIST')
 
 
@@ -86,14 +86,16 @@ if __name__ == '__main__':
         clients_labelnums.append(torch.bincount(torch.tensor(labels)).tolist())
     args.clients_labelnums = clients_labelnums
 
-    from algorithms.FedAvg import FedAvg_Server
-    server = FedAvg_Server(args)
-
-    # from algorithms.FedProto import FedProto
-    # server = FedProto(args, client_data_loaders, clients_labelnums)
-
-    # from algorithms.FPL import FedPL
-    # server = FedPL(args, client_data_loaders, clients_labelnums)
+    args.model = "FPL"
+    if args.model == "FedAvg":
+        from algorithms.FedAvg import FedAvg_Server
+        server = FedAvg_Server(args)
+    elif args.model == "FedProto":
+        from algorithms.FedProto import FedProto_Server
+        server = FedProto_Server(args)
+    elif args.model == "FPL":
+        from algorithms.FPL import FPL_Server
+        server = FPL_Server(args)
 
     server.ini(client_data_loaders)
     server.run(test_loader)

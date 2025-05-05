@@ -34,7 +34,7 @@ class ClientBase(nn.Module):
             for batch_idx, (images, labels) in enumerate(self.train_loader):
                 images = images.to(self.device)
                 labels = labels.to(self.device)
-                outputs = self.model(images)
+                _, outputs = self.model(images)
                 loss = nn.CrossEntropyLoss()(outputs, labels.long())
                 trainloss += loss.item()
                 optimizer.zero_grad()
