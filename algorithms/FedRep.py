@@ -30,7 +30,7 @@ def MYNET(num_classes: int, nf: int = 64) -> ResNet:
 
 class FedRep_Client(ClientBase):
     def ini(self, model_name=None):
-        self.model = MYNET(self.args.N_Class, self.args.features_dim)
+        self.model = MYNET(self.args.N_Class)
         self.model.to(self.device)
 
     def train(self):
@@ -92,7 +92,7 @@ class FedRep_Server(ServerBase):
         self.global_model.to(self.device)
 
     def eval_one(self, dataloader):
-        acc_list, loss_list = [], []
+        acc_list = []
         clients = [self.clients[idx] for idx in self.clients_num_choice]
         for client in clients:
             net = client.model.to(self.device)
@@ -100,24 +100,18 @@ class FedRep_Server(ServerBase):
             with torch.no_grad():
                 correct = 0
                 total = 0
-                losstotal = 0
                 for images, labels in dataloader:
                     images = images.to(self.device)
                     labels = labels.to(self.device)
                     _, outputs = net(images)
-                    loss = torch.nn.CrossEntropyLoss(reduction='mean')(outputs, labels.long())
-                    losstotal += loss.item()
                     _, predicted = torch.max(outputs.data, 1)
                     total += labels.size(0)
                     correct += (predicted == labels).sum().item()
                 acc = 100 * correct / total
-                lossavg = losstotal / len(dataloader)
 
-                loss_list.append(lossavg)
                 acc_list.append(acc)
         acc = sum(acc_list) / len(acc_list)
-        loss = sum(loss_list) / len(loss_list)
-        return loss, acc
+        return acc
 
 
 if __name__ == '__main__':

@@ -86,19 +86,15 @@ class ServerBase(nn.Module):
         with torch.no_grad():
             correct = 0
             total = 0
-            losstotal = 0
             for images, labels in dataloader:
                 images = images.to(self.device)
                 labels = labels.to(self.device)
                 _, outputs = net(images)
-                loss = torch.nn.CrossEntropyLoss(reduction='mean')(outputs, labels.long())
-                losstotal += loss.item()
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
             acc = 100 * correct / total
-            lossavg = losstotal / len(dataloader)
-        return lossavg, acc
+        return acc
 
     def global_update(self):
         self.aggregate_nets()
