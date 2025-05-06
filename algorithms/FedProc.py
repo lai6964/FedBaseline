@@ -122,5 +122,6 @@ class FedProc_Server(FedProto_Server):
     def local_update(self, epoch):
         alpha = 1 - epoch/(self.args.CommunicationEpoch-1)
         for idx in tqdm(self.clients_num_choice):
+            self.clients[idx].receive_model(self.global_model)
             self.clients[idx].train(self.global_protos, alpha)
         return None

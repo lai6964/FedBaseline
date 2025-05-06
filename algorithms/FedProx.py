@@ -45,5 +45,6 @@ class FedProx_Server(ServerBase):
 
     def local_update(self):
         for idx in tqdm(self.clients_num_choice):
+            self.clients[idx].receive_model(self.global_model)
             self.clients[idx].train(self.global_model)
         return None

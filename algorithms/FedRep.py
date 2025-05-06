@@ -24,7 +24,6 @@ class ResNet_new(ResNet):
         feature = self.feature_extra(x)
         out = self.classifier(feature)
         return feature, out
-
 def MYNET(num_classes: int, nf: int = 64) -> ResNet:
     return ResNet_new(BasicBlock, [2, 2, 2, 2], num_classes, nf)
 
@@ -66,6 +65,15 @@ class FedRep_Client(ClientBase):
                 loss.backward()
                 optimizer.step()
         return None
+
+    def receive_model(self, global_model):
+        for name, new_param in global_model.named_parameters():
+            if name.startswith('feature_extra'):
+                old_param = self.model.get_parameter(name)
+                if old_param is not None:
+                    old_param.data = new_param.data.clone()
+                else:
+                    raise ValueError("未定义的模型参数{}".format(name))
 
 class FedRep_Server(ServerBase):
     def __init__(self, args):

@@ -127,13 +127,11 @@ class FedProto_Server(ServerBase):
 
     def local_update(self):
         for idx in tqdm(self.clients_num_choice):
+
             self.clients[idx].train(self.global_protos)
         return None
 
     def global_update(self):
         self.aggregate_nets()
         self.global_protos = self.proto_aggregation()
-        for idx in self.clients_num_choice:
-            for param, target_param in zip(self.clients[idx].model.parameters(), self.global_model.parameters()):
-                param.data = target_param.data.clone()
         return None

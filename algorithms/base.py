@@ -41,6 +41,10 @@ class ClientBase(nn.Module):
                 loss.backward()
                 optimizer.step()
 
+    def receive_model(self, global_model):
+        for new_param, old_param in zip(global_model.parameters(), self.model.parameters()):
+            old_param.data = new_param.data.clone()
+
 
 class ServerBase(nn.Module):
 
@@ -98,13 +102,11 @@ class ServerBase(nn.Module):
 
     def global_update(self):
         self.aggregate_nets()
-        for idx in self.clients_num_choice:
-            for param, target_param in zip(self.clients[idx].model.parameters(), self.global_model.parameters()):
-                param.data = target_param.data.clone()
         return None
 
     def local_update(self):
         for idx in tqdm(self.clients_num_choice):
+            self.clients[idx].receive_model(self.global_model)
             self.clients[idx].train()
         return None
 
