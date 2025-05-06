@@ -1,2 +1,2 @@
-from backbone.ResNet import ResNet18
+from backbone_aug.ResNet import ResNet18
 
