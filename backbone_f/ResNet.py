@@ -83,20 +83,6 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, nf * 8, num_blocks[3], stride=2)
         self.linear = nn.Linear(nf * 8 * block.expansion, num_classes)
 
-        self._features = nn.Sequential(self.conv1,
-                                       self.bn1,
-                                       nn.ReLU(),
-                                       self.layer1,
-                                       self.layer2,
-                                       self.layer3,
-                                       self.layer4)
-        self.classifier = self.linear
-
-        self.encoder = nn.Sequential(
-            nn.Linear(nf * 8 * block.expansion, nf * 8 * block.expansion),
-            nn.ReLU(inplace=True),
-            nn.Linear(nf * 8 * block.expansion, 512)
-        )
 
     def _make_layer(self, block: BasicBlock, planes: int,
                     num_blocks: int, stride: int) -> nn.Module:
