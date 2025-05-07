@@ -43,7 +43,7 @@ class FedRoD_Client(ClientBase):
     def train(self):
         self.model.to(self.device)
         self.model.train()
-        optimizer = optim.SGD(self.model.feature_extra.parameters(), lr=self.local_lr, momentum=0.9, weight_decay=1e-5)
+        optimizer = optim.SGD(self.model.parameters(), lr=self.local_lr, momentum=0.9, weight_decay=1e-5)
         # optimizer_feat = optim.SGD(self.model.feature_extra.parameters(), lr=self.local_lr)
         # optimizer_head = torch.optim.SGD(self.model.classifier.parameters(), lr=self.local_lr)
         for epoch in range(self.local_epoch):
@@ -89,6 +89,11 @@ class FedRoD_Client(ClientBase):
                     raise ValueError("未定义的模型参数{}".format(name))
 
 class FedRoD_Server(ServerBase):
+    def __init__(self, args):
+        super().__init__(args)
+        self.name = 'FedRoD'
+        self.aggregate_mode = 'weights'
+
     def ini(self, client_data_loaders):
         for idx in range(self.args.N_Participants):
             self.clients.append(FedRoD_Client(self.args, idx, client_data_loaders[idx], self.clients_labelnums[idx]))

@@ -1,6 +1,7 @@
 """
 <FedProc: Prototypical Contrastive Federated Learning on Non-IID data> FGCS2023
 本地更新增加原型对比损失。减小本地类的原型与全局同一类原型的距离，增大与全局不同类原型之间的距离
+传输了原型和模型两个
 """
 from algorithms.base import *
 from algorithms.FedProto import FedProto_Server, agg_func

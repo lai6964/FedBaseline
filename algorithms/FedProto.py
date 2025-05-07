@@ -1,6 +1,7 @@
 """
 《FedProto: Federated Prototype Learning across Heterogeneous Clients》AAAI2022
 每个客户端算类别原型，计算类别的全局原型（这里原文和代码不同，原本有客户端上类别样本数量的权重，代码直接取了平均）
+全局只传输了原型，没有传模型
 """
 from algorithms.base import *
 
@@ -127,7 +128,6 @@ class FedProto_Server(ServerBase):
 
     def local_update(self):
         for idx in tqdm(self.clients_num_choice):
-
             self.clients[idx].train(self.global_protos)
         return None
 

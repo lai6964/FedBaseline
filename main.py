@@ -86,7 +86,7 @@ if __name__ == '__main__':
         clients_labelnums.append(torch.bincount(torch.tensor(labels)).tolist())
     args.clients_labelnums = clients_labelnums
 
-    args.model = "FPL"
+    args.model = "FedPAC"
     if args.model == "FedAvg":
         from algorithms.FedAvg import FedAvg_Server
         server = FedAvg_Server(args)
@@ -96,9 +96,28 @@ if __name__ == '__main__':
     elif args.model == "FPL":
         from algorithms.FPL import FPL_Server
         server = FPL_Server(args)
+    elif args == "FedRep":
+        from algorithms.FedRep import FedRep_Server
+        server = FedRep_Server(args)
+    elif args.model == "FedRoD":
+        from algorithms.FedRoD import FedRoD_Server
+        server = FedRoD_Server(args)
+    elif args.model == "FedProx":
+        from algorithms.FedProx import FedProx_Server
+        server = FedProx_Server(args)
+    elif args.model == "FedProc":
+        from algorithms.FedProc import FedProc_Server
+        server = FedProc_Server(args)
+    elif args.model == "FedPAC":
+        from algorithms.FedPAC import FedPAC_Server
+        server = FedPAC_Server(args)
+
+    # server.ini(client_data_loaders)
+    # server.run(test_loader)
 
     server.ini(client_data_loaders)
-    server.run(test_loader)
-
+    a=[]
+    a.append(server.clients[0].V)
+    print(a)
 
 

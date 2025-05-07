@@ -36,15 +36,30 @@ class FedRep_Client(ClientBase):
     def train(self):
         self.model.to(self.device)
         self.model.train()
-        optimizer = optim.SGD(self.model.feature_extra.parameters(), lr=self.local_lr, momentum=0.9, weight_decay=1e-5)
+        optimizer = optim.SGD(self.model.parameters(), lr=self.local_lr, momentum=0.9, weight_decay=1e-5)
+        # ！！！！ 他们这变把optimizer分成optimizer_feat 和 optimizer_cla 两个分别更新，我直接写一起了
 
+        # 先运行一次更新分类器
+        for name, param in self.model.named_parameters():  # 冻结 特征提取层 的权重
+            if 'feature_extra' in name:
+                param.requires_grad = False
+            if 'classifier' in name:
+                param.requires_grad = True
+        for batch_idx, (images, labels) in enumerate(self.train_loader):
+            images = images.to(self.device)
+            labels = labels.to(self.device)
+            _, outputs = self.model(images)
+            loss = nn.CrossEntropyLoss()(outputs, labels.long())
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        # 更新特征提取器
         for name, param in self.model.named_parameters():# 冻结 分类器 的权重
             if 'feature_extra' in name:
                 param.requires_grad = True
             if 'classifier' in name:
                 param.requires_grad = False
-
-
         for epoch in range(self.local_epoch):
             trainloss = 0
             for batch_idx, (images, labels) in enumerate(self.train_loader):
@@ -53,13 +68,6 @@ class FedRep_Client(ClientBase):
                 _, outputs = self.model(images)
                 loss = nn.CrossEntropyLoss()(outputs, labels.long())
                 trainloss += loss.item()
-
-                if epoch==self.local_epoch-1:
-                    for name, param in self.model.named_parameters():# 冻结 特征提取层 的权重
-                        if 'feature_extra' in name:
-                            param.requires_grad = False
-                        if 'classifier' in name:
-                            param.requires_grad = True
 
                 optimizer.zero_grad()
                 loss.backward()
