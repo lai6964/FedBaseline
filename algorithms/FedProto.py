@@ -4,12 +4,33 @@
 全局只传输了原型，没有传模型
 """
 from algorithms.base import *
+from torchvision.models.resnet import ResNet, BasicBlock
+class ResNet_new(ResNet):
+    def __init__(self, block: BasicBlock, layers: List[int], num_classes: int = 10) -> None:
+        super(ResNet_new, self).__init__(block, layers, num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+
+        x = self.avgpool(x)
+        feature = torch.flatten(x, 1)
+        out = self.fc(feature)
+        return feature, out
+def MYNET(num_classes: int):
+    return ResNet_new(BasicBlock, [2, 2, 2, 2], num_classes)
 
 def agg_func(protos):
     """
     Returns the average of the weights.
     """
-
     for [label, proto_list] in protos.items():
         if len(proto_list) > 1:
             proto = 0 * proto_list[0].data
@@ -27,24 +48,27 @@ class FedProto_Client(ClientBase):
         self.local_protos = {}
         self.mu = 0.01
 
+    def ini(self):
+        self.model = MYNET(self.num_classes)
+        self.model.to(self.device)
+
 
     def train(self, global_protos):
-        self.model.to(self.args.device)
-        # optimizer = optim.SGD(net.parameters(), lr=self.args.local_lr, momentum=0.9, weight_decay=1e-5)
-        optimizer = optim.Adam(self.model.parameters(), lr=self.args.local_lr, weight_decay=1e-5)
+        self.model.to(self.device)
+        # optimizer = optim.SGD(net.parameters(), lr=self.local_lr, momentum=0.9, weight_decay=1e-5)
+        optimizer = optim.Adam(self.model.parameters(), lr=self.local_lr, weight_decay=1e-5)
 
         self.model.train()
-        agg_protos_label = {}
-        for epoch in range(self.args.local_epoch):
+        for epoch in range(self.local_epoch):
             trainloss = 0
             for batch_idx, (images, labels) in enumerate(self.train_loader):
-                images = images.to(self.args.device)
-                labels = labels.to(self.args.device)
+                images = images.to(self.device)
+                labels = labels.to(self.device)
                 features, outputs = self.model(images)
-                loss_CE = nn.CrossEntropyLoss()(outputs, labels.long())
+                loss = nn.CrossEntropyLoss()(outputs, labels.long())
 
                 if len(global_protos) == 0:
-                    lossProto = 0*loss_CE
+                    continue
                 else:
                     f_new = copy.deepcopy(features.data)
                     i = 0
@@ -52,20 +76,30 @@ class FedProto_Client(ClientBase):
                         if label.item() in global_protos.keys():
                             f_new[i, :] = global_protos[label.item()][0].data
                         i += 1
-                    lossProto = nn.MSELoss()(f_new, features)
-                loss = loss_CE + lossProto * self.mu
+                    loss += self.mu * nn.MSELoss()(f_new, features)
                 trainloss += loss.item()
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
-                if epoch == self.args.local_epoch-1:
-                    for i in range(len(labels)):
-                        if labels[i].item() in agg_protos_label:
-                            agg_protos_label[labels[i].item()].append(features[i,:])
-                        else:
-                            agg_protos_label[labels[i].item()] = [features[i,:]]
-        self.local_protos = agg_func(agg_protos_label)
+        self.get_local_protos()
+        return None
+
+    def get_local_protos(self):
+        agg_protos_label = {}
+        self.model.eval()
+        with torch.no_grad():
+            for images, labels in self.train_loader:
+                images = images.to(self.device)
+                labels = labels.to(self.device)
+                features, outputs = self.model(images)
+                for i in range(len(labels)):
+                    if labels[i].item() in agg_protos_label:
+                        agg_protos_label[labels[i].item()].append(features[i, :])
+                    else:
+                        agg_protos_label[labels[i].item()] = [features[i, :]]
+        self.local_special_protos = agg_func(agg_protos_label)
+        return None
 
 
 class FedProto_Server(ServerBase):
@@ -135,3 +169,34 @@ class FedProto_Server(ServerBase):
         self.aggregate_nets()
         self.global_protos = self.proto_aggregation()
         return None
+
+    def eval(self, epoch, dataloader):
+        net = self.global_model.to(self.device)
+        net.eval()
+        with torch.no_grad():
+            correct = 0
+            total = 0
+            for images, labels in dataloader:
+                images = images.to(self.device)
+                labels = labels.to(self.device)
+                _, outputs = net(images)
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+            acc = 100 * correct / total
+
+        with open("{}_result.txt".format(self.name), 'a+') as fp:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            fp.writelines("\n[{}]epoch_{}_acc:{:.3f}".format(timestamp, epoch, acc))
+        return acc
+
+if __name__ == '__main__':
+    model = MYNET(10)
+    random_input = torch.randn(2, 3, 32, 32)
+
+    with torch.no_grad():
+        feature, output = model(random_input)
+
+    # 查看输出结果
+    print("Output shape:", output.shape)
+    print("Output tensor:", output)

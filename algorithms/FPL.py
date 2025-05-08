@@ -22,10 +22,6 @@ class FPL_Client(FedProto_Client):
         super().__init__(args, id, train_loader)
         self.infoNCET = 0.02
 
-    def ini(self, model_name=None):
-        from backbone_f.init_fl_model import get_model_by_name
-        self.model = get_model_by_name(model_name)
-        self.model.to(self.device)
     def train(self, global_protos):
         net = self.model.to(self.device)
         optimizer = optim.SGD(net.parameters(), lr=self.args.local_lr, momentum=0.9, weight_decay=1e-5)
@@ -45,7 +41,6 @@ class FPL_Client(FedProto_Client):
             mean_f = [item.detach() for item in mean_f]
 
         for iter in range(self.local_epoch):
-            agg_protos_label = {}
             for batch_idx, (images, labels) in enumerate(self.train_loader):
                 optimizer.zero_grad()
 
@@ -78,14 +73,8 @@ class FPL_Client(FedProto_Client):
                 loss.backward()
                 optimizer.step()
 
-                if iter == self.args.local_epoch - 1:
-                    for i in range(len(labels)):
-                        if labels[i].item() in agg_protos_label:
-                            agg_protos_label[labels[i].item()].append(features[i, :])
-                        else:
-                            agg_protos_label[labels[i].item()] = [features[i, :]]
-
-        self.local_protos = agg_func(agg_protos_label)
+        self.get_local_protos()
+        return None
 
     def hierarchical_info_loss(self, f_now, label, all_f, mean_f, all_global_protos_keys):
         # 官方代码这里有问题，没法运行，按照原文说法修改了一下，

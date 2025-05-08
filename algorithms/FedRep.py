@@ -5,27 +5,28 @@ FedRepã€ŠExploiting Shared Representations for Personalized Federated Learningã€
 """
 
 from algorithms.base import *
-from backbone_f.ResNet import *
+from torchvision.models.resnet import ResNet, BasicBlock
 class ResNet_new(ResNet):
-    def __init__(self, block: BasicBlock, num_blocks: List[int],
-                 num_classes: int, nf: int) -> None:
-        super(ResNet_new, self).__init__(block, num_blocks, num_classes, nf)
+    def __init__(self, block: BasicBlock, layers: List[int], num_classes: int = 10) -> None:
+        super(ResNet_new, self).__init__(block, layers, num_classes)
         self.feature_extra = nn.Sequential(self.conv1,
-                                       self.bn1,
-                                       nn.ReLU(),
-                                       self.layer1,
-                                       self.layer2,
-                                       self.layer3,
-                                       self.layer4,
-                                       nn.Flatten())
-        self.classifier = self.linear
+                                           self.bn1,
+                                           self.relu,
+                                           self.maxpool,
+                                           self.layer1,
+                                           self.layer2,
+                                           self.layer3,
+                                           self.layer4,
+                                           self.avgpool,
+                                           nn.Flatten())
+        self.classifier = self.fc
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         feature = self.feature_extra(x)
-        out = self.classifier(feature)
-        return feature, out
-def MYNET(num_classes: int, nf: int = 64) -> ResNet:
-    return ResNet_new(BasicBlock, [2, 2, 2, 2], num_classes, nf)
+        out = self.fc(feature)
+        return out
+def MYNET(num_classes: int):
+    return ResNet_new(BasicBlock, [2, 2, 2, 2], num_classes)
 
 
 class FedRep_Client(ClientBase):
@@ -48,7 +49,7 @@ class FedRep_Client(ClientBase):
         for batch_idx, (images, labels) in enumerate(self.train_loader):
             images = images.to(self.device)
             labels = labels.to(self.device)
-            _, outputs = self.model(images)
+            outputs = self.model(images)
             loss = nn.CrossEntropyLoss()(outputs, labels.long())
             optimizer.zero_grad()
             loss.backward()
@@ -65,7 +66,7 @@ class FedRep_Client(ClientBase):
             for batch_idx, (images, labels) in enumerate(self.train_loader):
                 images = images.to(self.device)
                 labels = labels.to(self.device)
-                _, outputs = self.model(images)
+                outputs = self.model(images)
                 loss = nn.CrossEntropyLoss()(outputs, labels.long())
                 trainloss += loss.item()
 
@@ -111,7 +112,7 @@ class FedRep_Server(ServerBase):
                 for images, labels in dataloader:
                     images = images.to(self.device)
                     labels = labels.to(self.device)
-                    _, outputs = net(images)
+                    outputs = net(images)
                     _, predicted = torch.max(outputs.data, 1)
                     total += labels.size(0)
                     correct += (predicted == labels).sum().item()

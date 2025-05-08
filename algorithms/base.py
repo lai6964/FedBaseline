@@ -3,11 +3,15 @@ import random
 import torch
 import torchvision
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from tqdm import tqdm
 import numpy as np
 import copy
 from datetime import datetime
+from typing import List
+
+
 
 
 class ClientBase(nn.Module):
@@ -18,15 +22,15 @@ class ClientBase(nn.Module):
         self.train_loader = train_loader
         self.device = args.device
         self.local_epoch = args.local_epoch
+        self.local_lr = args.local_lr
 
     def ini(self, model_name=None):
-        from backbone_f.init_fl_model import get_model_by_name
-        self.model = get_model_by_name(model_name)
+        self.model = torchvision.models.resnet18(num_classes=self.args.N_Class)
         self.model.to(self.device)
 
     def train(self):
         self.model.to(self.device)
-        optimizer = optim.Adam(self.model.parameters(), lr=self.args.local_lr, weight_decay=1e-5)
+        optimizer = optim.Adam(self.model.parameters(), lr=self.local_lr, weight_decay=1e-5)
 
         self.model.train()
         for epoch in range(self.local_epoch):
@@ -34,7 +38,7 @@ class ClientBase(nn.Module):
             for batch_idx, (images, labels) in enumerate(self.train_loader):
                 images = images.to(self.device)
                 labels = labels.to(self.device)
-                _, outputs = self.model(images)
+                outputs = self.model(images)
                 loss = nn.CrossEntropyLoss()(outputs, labels.long())
                 trainloss += loss.item()
                 optimizer.zero_grad()
@@ -75,10 +79,10 @@ class ServerBase(nn.Module):
 
             if test_loader is not None:
                 if epoch%self.args.eval_epoch_gap==0:
-                    self.eval_one(epoch, test_loader)
+                    self.eval(epoch, test_loader)
         return None
 
-    def eval_one(self, epoch, dataloader):
+    def eval(self, epoch, dataloader):
         net = self.global_model.to(self.device)
         net.eval()
         with torch.no_grad():
@@ -87,7 +91,7 @@ class ServerBase(nn.Module):
             for images, labels in dataloader:
                 images = images.to(self.device)
                 labels = labels.to(self.device)
-                _, outputs = net(images)
+                outputs = net(images)
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
@@ -96,7 +100,7 @@ class ServerBase(nn.Module):
         with open("{}_result.txt".format(self.name), 'a+') as fp:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             fp.writelines("\n[{}]epoch_{}_acc:{:.3f}".format(timestamp, epoch, acc))
-        return None
+        return acc
 
     def global_update(self):
         self.aggregate_nets()

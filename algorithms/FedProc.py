@@ -4,12 +4,9 @@
 传输了原型和模型两个
 """
 from algorithms.base import *
-from algorithms.FedProto import FedProto_Server, agg_func
+from algorithms.FedProto import FedProto_Server, FedProto_Client
 
-class FedProc_Client(ClientBase):
-    def __init__(self, args, id, train_loader):
-        super(FedProc_Client, self).__init__(args, id, train_loader)
-        self.local_protos = {}
+class FedProc_Client(FedProto_Client):
 
     def train(self, global_protos, alpha):
 
@@ -28,7 +25,6 @@ class FedProc_Client(ClientBase):
 
         iterator = tqdm(range(self.local_epoch))
         for iter in iterator:
-            agg_protos_label = {}
             for batch_idx, (images, labels) in enumerate(self.train_loader):
                 optimizer.zero_grad()
                 images = images.to(self.device)
@@ -47,8 +43,7 @@ class FedProc_Client(ClientBase):
 
                             f_pos = np.array(all_f)[all_global_protos_keys==label.item()][0].to(self.device)
 
-                            f_neg = torch.cat(list(np.array(all_f)[all_global_protos_keys != label.item()])).to(
-                                self.device)
+                            f_neg = torch.cat(list(np.array(all_f)[all_global_protos_keys != label.item()])).to( self.device)
 
                             f_now = f[i].unsqueeze(0)
 
@@ -85,14 +80,8 @@ class FedProc_Client(ClientBase):
                 loss.backward()
                 optimizer.step()
 
-                if iter == self.local_epoch-1:
-                    for i in range(len(labels)):
-                        if labels[i].item() in agg_protos_label:
-                            agg_protos_label[labels[i].item()].append(f[i,:])
-                        else:
-                            agg_protos_label[labels[i].item()] = [f[i,:]]
-
-        self.local_protos = agg_func(agg_protos_label)
+        self.get_local_protos()
+        return None
 
 
 class FedProc_Server(FedProto_Server):

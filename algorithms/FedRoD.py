@@ -5,30 +5,30 @@ FedRoD《On Bridging Generic and Personalized Federated Learning for Image Class
 """
 
 from algorithms.base import *
-from backbone_f.ResNet import *
+from torchvision.models.resnet import ResNet, BasicBlock
 class ResNet_new(ResNet):
-    def __init__(self, block: BasicBlock, num_blocks: List[int],
-                 num_classes: int, nf: int) -> None:
-        super(ResNet_new, self).__init__(block, num_blocks, num_classes, nf)
+    def __init__(self, block: BasicBlock, layers: List[int], num_classes: int = 10) -> None:
+        super(ResNet_new, self).__init__(block, layers, num_classes)
         self.feature_extra = nn.Sequential(self.conv1,
-                                       self.bn1,
-                                       nn.ReLU(),
-                                       self.layer1,
-                                       self.layer2,
-                                       self.layer3,
-                                       self.layer4,
-                                       nn.Flatten())
-        self.G_head = nn.Linear(nf * 8 * block.expansion, num_classes)
-        self.P_head = nn.Linear(nf * 8 * block.expansion, num_classes)
+                                           self.bn1,
+                                           self.relu,
+                                           self.maxpool,
+                                           self.layer1,
+                                           self.layer2,
+                                           self.layer3,
+                                           self.layer4,
+                                           self.avgpool,
+                                           nn.Flatten())
+        self.P_head = nn.Linear(512 * block.expansion, num_classes)
+        self.G_head = nn.Linear(512 * block.expansion, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         feature = self.feature_extra(x)
         out_G = self.G_head(feature)
         out_P = self.P_head(feature.detach())
-        output = out_G.detach() + out_P
-        return feature, out_G, output
-def MYNET(num_classes: int, nf: int = 64) -> ResNet:
-    return ResNet_new(BasicBlock, [2, 2, 2, 2], num_classes, nf)
+        return feature, out_G, out_P
+def MYNET(num_classes: int):
+    return ResNet_new(BasicBlock, [2, 2, 2, 2], num_classes)
 
 
 class FedRoD_Client(ClientBase):
@@ -51,10 +51,10 @@ class FedRoD_Client(ClientBase):
             for batch_idx, (images, labels) in enumerate(self.train_loader):
                 images = images.to(self.device)
                 labels = labels.to(self.device)
-                features, outputs_G, outputs = self.model(images)
+                features, outputs_G, outputs_P = self.model(images)
                 # 这里不知道为啥他们要分开写，我把detach写在model里面了，直接一起回传
                 loss_bsm = self.balanced_softmax_loss(labels, features)
-                loss_CE = nn.CrossEntropyLoss()(outputs, labels.long())
+                loss_CE = nn.CrossEntropyLoss()(outputs_G.detach()+outputs_P, labels.long())
                 loss = loss_CE + loss_bsm
                 trainloss += loss.item()
 
@@ -104,7 +104,7 @@ class FedRoD_Server(ServerBase):
         self.global_model = copy.deepcopy(self.clients[0].model)
         self.global_model.to(self.device)
 
-    def eval_one(self, epoch, dataloader, personalization=False):
+    def eval(self, epoch, dataloader, personalization=True):
         net = self.global_model.to(self.device)
         net.eval()
         with torch.no_grad():
@@ -142,11 +142,11 @@ class FedRoD_Server(ServerBase):
             with open("{}_result.txt".format(self.name), 'a+') as fp:
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 fp.writelines("\n[{}]epoch_{}_accG:{:.3f}_accP:{:.3f}".format(timestamp, epoch, acc_G, acc_P))
-            return acc_G, acc_P
+            return None
         with open("{}_result.txt".format(self.name), 'a+') as fp:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             fp.writelines("\n[{}]epoch_{}_acc:{:.3f}".format(timestamp, epoch, acc_G))
-        return acc_G
+        return None
 
 if __name__ == '__main__':
     model = MYNET(10)

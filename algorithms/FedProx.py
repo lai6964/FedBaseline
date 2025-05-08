@@ -8,6 +8,7 @@ class FedProx_Client(ClientBase):
     def __init__(self, args, id, train_loader):
         super().__init__(args, id, train_loader)
         self.mu = 0.01
+
     def train(self, global_model):
         self.model.to(self.device)
         optimizer = optim.SGD(self.model.parameters(), lr=self.args.local_lr, momentum=0.9, weight_decay=1e-5)
@@ -19,12 +20,10 @@ class FedProx_Client(ClientBase):
             for batch_idx, (images, labels) in enumerate(self.train_loader):
                 images = images.to(self.device)
                 labels = labels.to(self.device)
-                _, outputs = self.model(images)
+                outputs = self.model(images)
                 loss = criterion(outputs, labels)
-                fed_prox_reg = 0.0
                 for param_index, param in enumerate(self.model.parameters()):
-                    fed_prox_reg += ((0.01 / 2) * torch.norm((param - global_weight_collector[param_index])) ** 2)
-                loss += self.mu * fed_prox_reg
+                    loss += ((self.mu / 2) * torch.norm((param - global_weight_collector[param_index])) ** 2)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()

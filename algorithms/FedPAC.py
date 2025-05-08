@@ -4,40 +4,40 @@ FedPAC《Personalized Federated Learning with Feature Alignment and Classifier C
 """
 import cvxpy as cvx
 from algorithms.base import *
-from algorithms.FedProto import agg_func, FedProto_Server
-from backbone_f.ResNet import *
+from algorithms.FedProto import FedProto_Server, FedProto_Client
+from torchvision.models.resnet import ResNet, BasicBlock
 class ResNet_new(ResNet):
-    def __init__(self, block: BasicBlock, num_blocks: List[int],
-                 num_classes: int, nf: int) -> None:
-        super(ResNet_new, self).__init__(block, num_blocks, num_classes, nf)
+    def __init__(self, block: BasicBlock, layers: List[int], num_classes: int = 10) -> None:
+        super(ResNet_new, self).__init__(block, layers, num_classes)
         self.feature_extra = nn.Sequential(self.conv1,
-                                       self.bn1,
-                                       nn.ReLU(),
-                                       self.layer1,
-                                       self.layer2,
-                                       self.layer3,
-                                       self.layer4,
-                                       nn.Flatten())
-        self.head = nn.Linear(nf * 8 * block.expansion, num_classes)
+                                           self.bn1,
+                                           self.relu,
+                                           self.maxpool,
+                                           self.layer1,
+                                           self.layer2,
+                                           self.layer3,
+                                           self.layer4,
+                                           self.avgpool,
+                                           nn.Flatten())
+        self.head = self.fc
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         feature = self.feature_extra(x)
         out = self.head(feature)
         return feature, out
-def MYNET(num_classes: int, nf: int = 64) -> ResNet:
-    return ResNet_new(BasicBlock, [2, 2, 2, 2], num_classes, nf)
+def MYNET(num_classes: int):
+    return ResNet_new(BasicBlock, [2, 2, 2, 2], num_classes)
 
 
-class FedPAC_Client(ClientBase):
+class FedPAC_Client(FedProto_Client):
     def __init__(self, args, id, train_loader):
         super(FedPAC_Client, self).__init__(args, id, train_loader)
-        self.local_protos = {}
         self.num_classes = args.N_Class
         self.train_samples = sum(args.clients_labelnums[id])
         self.V, self.h = self.statistics_extraction()
 
     def ini(self, model_name=None):
-        self.model = MYNET(self.args.N_Class)
+        self.model = MYNET(self.num_classes)
         self.model.to(self.device)
 
     def train(self, global_protos):
@@ -81,14 +81,8 @@ class FedPAC_Client(ClientBase):
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-            if epoch == self.args.local_epoch - 1:
-                agg_protos_label = {}
-                for i in range(len(labels)):
-                    if labels[i].item() in agg_protos_label:
-                        agg_protos_label[labels[i].item()].append(features[i, :])
-                    else:
-                        agg_protos_label[labels[i].item()] = [features[i, :]]
-        self.local_protos = agg_func(agg_protos_label)
+
+        self.get_local_protos()
         self.V, self.h = self.statistics_extraction()
         return None
 
