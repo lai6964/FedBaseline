@@ -104,7 +104,7 @@ class FedRoD_Server(ServerBase):
         self.global_model = copy.deepcopy(self.clients[0].model)
         self.global_model.to(self.device)
 
-    def eval_one(self, dataloader, personalization=False):
+    def eval_one(self, epoch, dataloader, personalization=False):
         net = self.global_model.to(self.device)
         net.eval()
         with torch.no_grad():
@@ -139,7 +139,13 @@ class FedRoD_Server(ServerBase):
                     acc = 100 * correct / total
                     acc_list.append(acc)
             acc_P = sum(acc_list) / len(acc_list)
+            with open("{}_result.txt".format(self.name), 'a+') as fp:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                fp.writelines("\n[{}]epoch_{}_accG:{:.3f}_accP:{:.3f}".format(timestamp, epoch, acc_G, acc_P))
             return acc_G, acc_P
+        with open("{}_result.txt".format(self.name), 'a+') as fp:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            fp.writelines("\n[{}]epoch_{}_acc:{:.3f}".format(timestamp, epoch, acc_G))
         return acc_G
 
 if __name__ == '__main__':

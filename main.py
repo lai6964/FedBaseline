@@ -29,6 +29,7 @@ def args_parser():
     parser.add_argument('--N_Participants', type=int, default=100)
     parser.add_argument('--clients_select_ratio',type=float,default=0.1)
     parser.add_argument('--Nets_Name_List',type=list,default=['ResNet18'])
+    parser.add_argument('--eval_epoch_gap', type=int, default=1)
 
     '''    Data Setting    '''
     parser.add_argument('--Public_Dataset_Name', type=str, default='cifar_100')
@@ -86,7 +87,7 @@ if __name__ == '__main__':
         clients_labelnums.append(torch.bincount(torch.tensor(labels)).tolist())
     args.clients_labelnums = clients_labelnums
 
-    args.model = "FedPAC"
+    # args.model = "FedPAC"
     if args.model == "FedAvg":
         from algorithms.FedAvg import FedAvg_Server
         server = FedAvg_Server(args)
@@ -112,12 +113,7 @@ if __name__ == '__main__':
         from algorithms.FedPAC import FedPAC_Server
         server = FedPAC_Server(args)
 
-    # server.ini(client_data_loaders)
-    # server.run(test_loader)
-
     server.ini(client_data_loaders)
-    a=[]
-    a.append(server.clients[0].V)
-    print(a)
+    server.run(test_loader)
 
 

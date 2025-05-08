@@ -114,10 +114,8 @@ class FedProc_Server(FedProto_Server):
             self.global_update()
 
             if test_loader is not None:
-                testloss, testacc = self.eval_one(test_loader)
-                with open("{}_result.txt".format(self.name), 'a+') as fp:
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    fp.writelines("\n[{}]epoch_{}_acc:{:.3f}_loss:{:.6f}".format(timestamp, epoch, testacc, testloss))
+                if epoch%self.args.eval_epoch_gap==0:
+                    self.eval_one(epoch, test_loader)
         return None
 
     def local_update(self, epoch):

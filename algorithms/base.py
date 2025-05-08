@@ -74,13 +74,11 @@ class ServerBase(nn.Module):
             self.global_update()
 
             if test_loader is not None:
-                testloss, testacc = self.eval_one(test_loader)
-                with open("{}_result.txt".format(self.name), 'a+') as fp:
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    fp.writelines("\n[{}]epoch_{}_acc:{:.3f}_loss:{:.6f}".format(timestamp, epoch, testacc, testloss))
+                if epoch%self.args.eval_epoch_gap==0:
+                    self.eval_one(epoch, test_loader)
         return None
 
-    def eval_one(self, dataloader):
+    def eval_one(self, epoch, dataloader):
         net = self.global_model.to(self.device)
         net.eval()
         with torch.no_grad():
@@ -94,7 +92,11 @@ class ServerBase(nn.Module):
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
             acc = 100 * correct / total
-        return acc
+
+        with open("{}_result.txt".format(self.name), 'a+') as fp:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            fp.writelines("\n[{}]epoch_{}_acc:{:.3f}".format(timestamp, epoch, acc))
+        return None
 
     def global_update(self):
         self.aggregate_nets()

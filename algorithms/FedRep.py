@@ -99,7 +99,7 @@ class FedRep_Server(ServerBase):
         self.global_model = copy.deepcopy(self.clients[0].model)
         self.global_model.to(self.device)
 
-    def eval_one(self, dataloader):
+    def eval_one(self, epoch, dataloader):
         acc_list = []
         clients = [self.clients[idx] for idx in self.clients_num_choice]
         for client in clients:
@@ -119,6 +119,9 @@ class FedRep_Server(ServerBase):
 
                 acc_list.append(acc)
         acc = sum(acc_list) / len(acc_list)
+        with open("{}_result.txt".format(self.name), 'a+') as fp:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            fp.writelines("\n[{}]epoch_{}_acc:{:.3f}".format(timestamp, epoch, acc))
         return acc
 
 
