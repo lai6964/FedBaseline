@@ -24,6 +24,7 @@ class ClientBase(nn.Module):
         self.local_epoch = args.local_epoch
         self.local_lr = args.local_lr
         self.num_classes = args.N_Class
+        self.local_protos = {}
 
     def ini(self, model_name=None):
         self.model = torchvision.models.resnet18(num_classes=self.args.N_Class)
@@ -31,9 +32,9 @@ class ClientBase(nn.Module):
 
     def train(self):
         self.model.to(self.device)
+        self.model.train()
         optimizer = optim.Adam(self.model.parameters(), lr=self.local_lr, weight_decay=1e-5)
 
-        self.model.train()
         for epoch in range(self.local_epoch):
             trainloss = 0
             for batch_idx, (images, labels) in enumerate(self.train_loader):
@@ -108,9 +109,25 @@ class ServerBase(nn.Module):
         return None
 
     def local_update(self):
-        for idx in tqdm(self.clients_num_choice):
-            self.clients[idx].receive_model(self.global_model)
-            self.clients[idx].train()
+        if self.args.using_multi_thread:
+            # 定义一个线程任务函数
+            import threading
+            def client_task(idx):
+                self.clients[idx].receive_model(self.global_model)
+                self.clients[idx].train(self.global_protos)
+
+            threads = []
+            for idx in self.clients_num_choice:
+                thread = threading.Thread(target=client_task, args=(idx,))
+                threads.append(thread)
+                thread.start()
+            # 等待所有线程完成
+            for thread in tqdm(threads, desc="Training Clients"):
+                thread.join()
+        else:
+            for idx in tqdm(self.clients_num_choice):
+                self.clients[idx].receive_model(self.global_model)
+                self.clients[idx].train()
         return None
 
     def aggregate_nets(self):

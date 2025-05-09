@@ -4,12 +4,15 @@
 传输了原型和模型两个
 """
 from algorithms.base import *
-from algorithms.FedProto import FedProto_Server, FedProto_Client
+from algorithms.FedProto import local_proto_aggregation, global_proto_aggregation, MYNET
 
-class FedProc_Client(FedProto_Client):
 
+class FedProc_Client(ClientBase):
+
+    def ini(self, model_name=None):
+        self.model = MYNET(self.num_classes)
+        self.model.to(self.device)
     def train(self, global_protos, alpha):
-
         net = self.model.to(self.device)
         optimizer = optim.SGD(net.parameters(), lr=self.local_lr, momentum=0.9, weight_decay=1e-5)
         criterion = nn.CrossEntropyLoss()
@@ -23,8 +26,7 @@ class FedProc_Client(FedProto_Client):
                 temp_f = torch.cat(temp_f, dim=0).to(self.device)
                 all_f.append(temp_f.cpu())
 
-        iterator = tqdm(range(self.local_epoch))
-        for iter in iterator:
+        for _ in range(self.local_epoch):
             for batch_idx, (images, labels) in enumerate(self.train_loader):
                 optimizer.zero_grad()
                 images = images.to(self.device)
@@ -79,15 +81,15 @@ class FedProc_Client(FedProto_Client):
                 loss.backward()
                 optimizer.step()
 
-        self.get_local_protos()
+        self.local_protos = local_proto_aggregation(self.model, self.train_loader, self.device)
         return None
 
 
-class FedProc_Server(FedProto_Server):
-    class FedProto_Server(ServerBase):
-        def __init__(self, args):
+class FedProc_Server(ServerBase):
+    def __init__(self, args):
             super().__init__(args)
             self.name = 'FedProc'
+            self.global_protos = []
 
     def ini(self, client_data_loaders):
         for idx in range(self.args.N_Participants):
@@ -110,9 +112,37 @@ class FedProc_Server(FedProto_Server):
                     self.eval(epoch, test_loader)
         return None
 
+    def global_update(self):
+        local_protos_list = []
+        for idx in tqdm(self.clients_num_choice):
+            local_protos_list.append(self.clients[idx].local_protos)
+        self.global_protos = global_proto_aggregation(local_protos_list)
+        self.aggregate_nets()
+        return None
+
     def local_update(self, epoch):
         alpha = 1 - epoch/(self.args.CommunicationEpoch-1)
         for idx in tqdm(self.clients_num_choice):
             self.clients[idx].receive_model(self.global_model)
             self.clients[idx].train(self.global_protos, alpha)
         return None
+
+    def eval(self, epoch, dataloader):
+        net = self.global_model.to(self.device)
+        net.eval()
+        with torch.no_grad():
+            correct = 0
+            total = 0
+            for images, labels in dataloader:
+                images = images.to(self.device)
+                labels = labels.to(self.device)
+                _, outputs = net(images)
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+            acc = 100 * correct / total
+
+        with open("{}_result.txt".format(self.name), 'a+') as fp:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            fp.writelines("\n[{}]epoch_{}_acc:{:.3f}".format(timestamp, epoch, acc))
+        return acc

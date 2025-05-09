@@ -11,11 +11,10 @@ DFL《 Disentangled Federated Learning for Tackling Attributes Skew via Invarian
 
 from algorithms.base import *
 from algorithms.FedProto import agg_func
-from backbone_f.ResNet import *
+from torchvision.models.resnet import ResNet, BasicBlock
 class ResNet_new(ResNet):
-    def __init__(self, block: BasicBlock, num_blocks: List[int],
-                 num_classes: int, nf: int) -> None:
-        super(ResNet_new, self).__init__(block, num_blocks, num_classes, nf)
+    def __init__(self, block: BasicBlock, layers: List[int], num_classes: int = 10) -> None:
+        super(ResNet_new, self).__init__(block, layers, num_classes)
         self.feature_G = nn.Sequential(self.conv1,
                                            self.bn1,
                                            self.relu,
@@ -169,7 +168,7 @@ class DFL_Server(ServerBase):
             self.clients[idx].train(self.special_protos_list)
         return None
 
-    def eval_one(self, epoch, dataloader):
+    def eval(self, epoch, dataloader):
         net = self.global_model.to(self.device)
         net.eval()
         with torch.no_grad():

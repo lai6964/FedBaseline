@@ -30,6 +30,7 @@ def args_parser():
     parser.add_argument('--clients_select_ratio',type=float,default=0.1)
     parser.add_argument('--Nets_Name_List',type=list,default=['ResNet18'])
     parser.add_argument('--eval_epoch_gap', type=int, default=1)
+    parser.add_argument('--using_multi_thread', type=str2bool, default=False)
 
     '''    Data Setting    '''
     parser.add_argument('--Public_Dataset_Name', type=str, default='cifar_100')
@@ -87,13 +88,19 @@ if __name__ == '__main__':
         clients_labelnums.append(torch.bincount(torch.tensor(labels)).tolist())
     args.clients_labelnums = clients_labelnums
 
-    # args.model = "FedRep"
+    args.model = "FedProc"
     if args.model == "FedAvg":
         from algorithms.FedAvg import FedAvg_Server
         server = FedAvg_Server(args)
-    elif args.model == "FedProto":
+    elif args.model == "FedProx":
+        from algorithms.FedProx import FedProx_Server
+        server = FedProx_Server(args)
+    elif args.model == "FedProto": # failed, 20% in Cifar10 - dirichlet_split(0.5) - NP100(0.1)
         from algorithms.FedProto import FedProto_Server
         server = FedProto_Server(args)
+    elif args.model == "FedProc":
+        from algorithms.FedProc import FedProc_Server
+        server = FedProc_Server(args)
     elif args.model == "FPL":
         from algorithms.FPL import FPL_Server
         server = FPL_Server(args)
@@ -103,12 +110,6 @@ if __name__ == '__main__':
     elif args.model == "FedRoD":
         from algorithms.FedRoD import FedRoD_Server
         server = FedRoD_Server(args)
-    elif args.model == "FedProx":
-        from algorithms.FedProx import FedProx_Server
-        server = FedProx_Server(args)
-    elif args.model == "FedProc":
-        from algorithms.FedProc import FedProc_Server
-        server = FedProc_Server(args)
     elif args.model == "FedPAC":
         from algorithms.FedPAC import FedPAC_Server
         server = FedPAC_Server(args)

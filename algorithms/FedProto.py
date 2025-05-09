@@ -3,13 +3,14 @@
 每个客户端算类别原型，计算类别的全局原型（这里原文和代码不同，原本有客户端上类别样本数量的权重，代码直接取了平均）
 全局只传输了原型，没有传模型
 """
+
 from algorithms.base import *
 from torchvision.models.resnet import ResNet, BasicBlock
 class ResNet_new(ResNet):
     def __init__(self, block: BasicBlock, layers: List[int], num_classes: int = 10) -> None:
         super(ResNet_new, self).__init__(block, layers, num_classes)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -39,13 +40,48 @@ def agg_func(protos):
             protos[label] = proto / len(proto_list)
         else:
             protos[label] = proto_list[0]
-
     return protos
+
+def local_proto_aggregation(model, dataloader, device):
+    agg_protos_label = {}
+    model.eval()
+    with torch.no_grad():
+        for images, labels in dataloader:
+            images = images.to(device)
+            labels = labels.to(device)
+            features, outputs = model(images)
+            for i in range(len(labels)):
+                if labels[i].item() in agg_protos_label:
+                    agg_protos_label[labels[i].item()].append(features[i, :])
+                else:
+                    agg_protos_label[labels[i].item()] = [features[i, :]]
+    local_special_protos = agg_func(agg_protos_label)
+    return local_special_protos
+
+def global_proto_aggregation(local_protos_list):
+    # 官方代码和原文不一致，原文应该有考虑每个client每个label的数量，但官方代码直接先客户端算平均标签特征，然后全局再均值
+    # 这个函数是官方代码copy过来的
+    agg_protos_label = dict()
+    for local_protos in local_protos_list:
+        for label in local_protos.keys():
+            if label in agg_protos_label:
+                agg_protos_label[label].append(local_protos[label])
+            else:
+                agg_protos_label[label] = [local_protos[label]]
+
+    for [label, proto_list] in agg_protos_label.items():
+        if len(proto_list) > 1:
+            proto = 0 * proto_list[0].data
+            for i in proto_list:
+                proto += i.data
+            agg_protos_label[label] = [proto / len(proto_list)]
+        else:
+            agg_protos_label[label] = [proto_list[0].data]
+    return agg_protos_label
 
 class FedProto_Client(ClientBase):
     def __init__(self, args, id, train_loader):
         super().__init__(args, id, train_loader)
-        self.local_protos = {}
         self.mu = 0.01
 
     def ini(self, model_name=None):
@@ -55,10 +91,10 @@ class FedProto_Client(ClientBase):
 
     def train(self, global_protos):
         self.model.to(self.device)
+        self.model.train()
         # optimizer = optim.SGD(net.parameters(), lr=self.local_lr, momentum=0.9, weight_decay=1e-5)
         optimizer = optim.Adam(self.model.parameters(), lr=self.local_lr, weight_decay=1e-5)
 
-        self.model.train()
         for epoch in range(self.local_epoch):
             trainloss = 0
             for batch_idx, (images, labels) in enumerate(self.train_loader):
@@ -82,24 +118,10 @@ class FedProto_Client(ClientBase):
                 loss.backward()
                 optimizer.step()
 
-        self.get_local_protos()
+        self.local_protos = local_proto_aggregation(self.model, self.train_loader, self.device)
         return None
 
-    def get_local_protos(self):
-        agg_protos_label = {}
-        self.model.eval()
-        with torch.no_grad():
-            for images, labels in self.train_loader:
-                images = images.to(self.device)
-                labels = labels.to(self.device)
-                features, outputs = self.model(images)
-                for i in range(len(labels)):
-                    if labels[i].item() in agg_protos_label:
-                        agg_protos_label[labels[i].item()].append(features[i, :])
-                    else:
-                        agg_protos_label[labels[i].item()] = [features[i, :]]
-        self.local_special_protos = agg_func(agg_protos_label)
-        return None
+
 
 
 class FedProto_Server(ServerBase):
@@ -116,32 +138,7 @@ class FedProto_Server(ServerBase):
                 self.clients[idx].ini(self.args.Nets_Name_List[0])
             else:
                 self.clients[idx].ini(self.args.Nets_Name_List[idx])
-        self.global_model = copy.deepcopy(self.clients[0].model)
-        self.global_model.to(self.device)
 
-
-    def proto_aggregation(self):
-        # 官方代码和原文不一致，原文应该有考虑每个client每个label的数量，但官方代码直接先客户端算平均标签特征，然后全局再均值
-        # 这个函数是官方代码copy过来的
-        agg_protos_label = dict()
-        for idx in self.clients_num_choice:
-            local_protos = self.clients[idx].local_protos
-            for label in local_protos.keys():
-                if label in agg_protos_label:
-                    agg_protos_label[label].append(local_protos[label])
-                else:
-                    agg_protos_label[label] = [local_protos[label]]
-
-        for [label, proto_list] in agg_protos_label.items():
-            if len(proto_list) > 1:
-                proto = 0 * proto_list[0].data
-                for i in proto_list:
-                    proto += i.data
-                agg_protos_label[label] = [proto / len(proto_list)]
-            else:
-                agg_protos_label[label] = [proto_list[0].data]
-
-        return agg_protos_label
 
     def proto_aggregation_ratio(self):
         # 这是按原文理解来写的
@@ -166,25 +163,31 @@ class FedProto_Server(ServerBase):
         return None
 
     def global_update(self):
-        self.aggregate_nets()
-        self.global_protos = self.proto_aggregation()
+        local_protos_list = []
+        for idx in tqdm(self.clients_num_choice):
+            local_protos_list.append(self.clients[idx].local_protos)
+        self.global_protos = global_proto_aggregation(local_protos_list)
         return None
 
     def eval(self, epoch, dataloader):
-        net = self.global_model.to(self.device)
-        net.eval()
-        with torch.no_grad():
-            correct = 0
-            total = 0
-            for images, labels in dataloader:
-                images = images.to(self.device)
-                labels = labels.to(self.device)
-                _, outputs = net(images)
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
-            acc = 100 * correct / total
-
+        acc_list = []
+        clients = [self.clients[idx] for idx in self.clients_num_choice]
+        for client in clients:
+            net = client.model.to(self.device)
+            net.eval()
+            with torch.no_grad():
+                correct = 0
+                total = 0
+                for images, labels in dataloader:
+                    images = images.to(self.device)
+                    labels = labels.to(self.device)
+                    _, outputs = net(images)
+                    _, predicted = torch.max(outputs.data, 1)
+                    total += labels.size(0)
+                    correct += (predicted == labels).sum().item()
+                acc = 100 * correct / total
+            acc_list.append(acc)
+        acc = sum(acc_list)/len(acc_list)
         with open("{}_result.txt".format(self.name), 'a+') as fp:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             fp.writelines("\n[{}]epoch_{}_acc:{:.3f}".format(timestamp, epoch, acc))

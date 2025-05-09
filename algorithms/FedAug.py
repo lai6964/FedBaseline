@@ -4,19 +4,20 @@
 """
 
 from algorithms.base import *
-from backbone_f.ResNet import *
+from torchvision.models.resnet import ResNet, BasicBlock
 class ResNet_new(ResNet):
-    def __init__(self, block: BasicBlock, num_blocks: List[int],
-                 num_classes: int, nf: int, hidden_dim=128, latent_dim=128) -> None:
-        super(ResNet_new, self).__init__(block, num_blocks, num_classes, nf)
+    def __init__(self, block: BasicBlock, layers: List[int], num_classes: int = 10, hidden_dim=128, latent_dim=128) -> None:
+        super(ResNet_new, self).__init__(block, layers, num_classes)
         self.encoder = nn.Sequential(self.conv1,
-                                       self.bn1,
-                                       nn.ReLU(),
-                                       self.layer1,
-                                       self.layer2,
-                                       self.layer3,
-                                       self.layer4,
-                                       nn.Flatten())
+                                           self.bn1,
+                                           self.relu,
+                                           self.maxpool,
+                                           self.layer1,
+                                           self.layer2,
+                                           self.layer3,
+                                           self.layer4,
+                                           self.avgpool,
+                                           nn.Flatten())
         self.decoder = nn.Sequential(
             nn.Linear(512+latent_dim, 256),
             nn.ReLU(),

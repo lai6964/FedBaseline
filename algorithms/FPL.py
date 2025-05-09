@@ -1,5 +1,5 @@
 from algorithms.base import *#Client, Server
-from algorithms.FedProto import FedProto_Server, FedProto_Client, agg_func
+from algorithms.FedProto import local_proto_aggregation, global_proto_aggregation
 import torch
 import numpy as np
 from sklearn import metrics
@@ -17,14 +17,14 @@ except Exception as e:
 
 ANN_THRESHOLD = 70000
 
-class FPL_Client(FedProto_Client):
+class FPL_Client(ClientBase):
     def __init__(self, args, id, train_loader):
         super().__init__(args, id, train_loader)
         self.infoNCET = 0.02
 
     def train(self, global_protos):
         net = self.model.to(self.device)
-        optimizer = optim.SGD(net.parameters(), lr=self.args.local_lr, momentum=0.9, weight_decay=1e-5)
+        optimizer = optim.SGD(net.parameters(), lr=self.local_lr, momentum=0.9, weight_decay=1e-5)
         criterion = nn.CrossEntropyLoss()
         criterion.to(self.device)
 
@@ -73,7 +73,7 @@ class FPL_Client(FedProto_Client):
                 loss.backward()
                 optimizer.step()
 
-        self.get_local_protos()
+        self.local_protos = local_proto_aggregation(self.model, self.train_loader, self.device)
         return None
 
     def hierarchical_info_loss(self, f_now, label, all_f, mean_f, all_global_protos_keys):
@@ -117,7 +117,7 @@ class FPL_Client(FedProto_Client):
         return infonce_loss
 
 
-class FPL_Server(FedProto_Server):
+class FPL_Server(ServerBase):
     def __init__(self, args):
         super(FPL_Server, self).__init__(args)
         self.name = "FPL"
@@ -131,6 +131,17 @@ class FPL_Server(FedProto_Server):
                 self.clients[idx].ini(self.args.Nets_Name_List[idx])
         self.global_model = copy.deepcopy(self.clients[0].model)
         self.global_model.to(self.device)
+
+    def local_update(self):
+        for idx in tqdm(self.clients_num_choice):
+            self.clients[idx].receive_model(self.global_model)
+            self.clients[idx].train(self.global_protos)
+        return None
+
+    def global_update(self):
+        self.global_protos = self.proto_aggregation()
+        self.aggregate_nets()
+        return None
 
     def proto_aggregation(self):
         agg_protos_label = dict()

@@ -4,7 +4,7 @@ FedPAC《Personalized Federated Learning with Feature Alignment and Classifier C
 """
 import cvxpy as cvx
 from algorithms.base import *
-from algorithms.FedProto import FedProto_Server, FedProto_Client
+from algorithms.FedProto import local_proto_aggregation, global_proto_aggregation
 from torchvision.models.resnet import ResNet, BasicBlock
 class ResNet_new(ResNet):
     def __init__(self, block: BasicBlock, layers: List[int], num_classes: int = 10) -> None:
@@ -29,10 +29,9 @@ def MYNET(num_classes: int):
     return ResNet_new(BasicBlock, [2, 2, 2, 2], num_classes)
 
 
-class FedPAC_Client(FedProto_Client):
+class FedPAC_Client(ClientBase):
     def __init__(self, args, id, train_loader):
         super(FedPAC_Client, self).__init__(args, id, train_loader)
-        self.num_classes = args.N_Class
         self.train_samples = sum(args.clients_labelnums[id])
         self.V, self.h = self.statistics_extraction()
 
@@ -82,7 +81,7 @@ class FedPAC_Client(FedProto_Client):
                 loss.backward()
                 optimizer.step()
 
-        self.get_local_protos()
+        self.local_protos = local_proto_aggregation(self.model, self.train_loader, self.device)
         self.V, self.h = self.statistics_extraction()
         return None
 
@@ -151,7 +150,7 @@ class FedPAC_Client(FedProto_Client):
             old_param.data = new_param.data.clone()
 
 
-class FedPAC_Server(FedProto_Server):
+class FedPAC_Server(ServerBase):
     def __init__(self, args):
         super().__init__(args)
         self.name = 'FedPAC'
@@ -173,7 +172,11 @@ class FedPAC_Server(FedProto_Server):
 
     def global_update(self):
         self.aggregate_nets()
-        self.global_protos = self.proto_aggregation()
+
+        local_protos_list = []
+        for idx in tqdm(self.clients_num_choice):
+            local_protos_list.append(self.clients[idx].local_protos)
+        self.global_protos = global_proto_aggregation(local_protos_list)
 
         Vars, Hs, uploaded_heads = [], [], []
         for idx in self.clients_num_choice:
