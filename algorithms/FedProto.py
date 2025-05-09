@@ -48,7 +48,7 @@ class FedProto_Client(ClientBase):
         self.local_protos = {}
         self.mu = 0.01
 
-    def ini(self):
+    def ini(self, model_name=None):
         self.model = MYNET(self.num_classes)
         self.model.to(self.device)
 

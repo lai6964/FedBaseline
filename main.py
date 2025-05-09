@@ -87,7 +87,7 @@ if __name__ == '__main__':
         clients_labelnums.append(torch.bincount(torch.tensor(labels)).tolist())
     args.clients_labelnums = clients_labelnums
 
-    args.model = "FedRep"
+    # args.model = "FedRep"
     if args.model == "FedAvg":
         from algorithms.FedAvg import FedAvg_Server
         server = FedAvg_Server(args)

@@ -23,6 +23,7 @@ class ClientBase(nn.Module):
         self.device = args.device
         self.local_epoch = args.local_epoch
         self.local_lr = args.local_lr
+        self.num_classes = args.N_Class
 
     def ini(self, model_name=None):
         self.model = torchvision.models.resnet18(num_classes=self.args.N_Class)

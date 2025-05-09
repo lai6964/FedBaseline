@@ -29,8 +29,7 @@ class FedProc_Client(FedProto_Client):
                 optimizer.zero_grad()
                 images = images.to(self.device)
                 labels = labels.to(self.device)
-                f = net.features(images)
-                outputs = net.classifier(f)
+                f, outputs = net(images)
                 lossCE = criterion(outputs, labels)
 
                 if len(global_protos) == 0:
@@ -85,6 +84,10 @@ class FedProc_Client(FedProto_Client):
 
 
 class FedProc_Server(FedProto_Server):
+    class FedProto_Server(ServerBase):
+        def __init__(self, args):
+            super().__init__(args)
+            self.name = 'FedProc'
 
     def ini(self, client_data_loaders):
         for idx in range(self.args.N_Participants):
@@ -104,7 +107,7 @@ class FedProc_Server(FedProto_Server):
 
             if test_loader is not None:
                 if epoch%self.args.eval_epoch_gap==0:
-                    self.eval_one(epoch, test_loader)
+                    self.eval(epoch, test_loader)
         return None
 
     def local_update(self, epoch):
