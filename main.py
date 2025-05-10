@@ -11,7 +11,7 @@ def args_parser():
     parser.add_argument('--Seed',type=int,default=42)
     parser.add_argument('--Dataset_Dir',type=str,default='../Dataset/')
     parser.add_argument('--Model_Path',type=str,default='Model_Storage')
-    parser.add_argument('--model', type=str, default='FPL', help='Model name.')
+    parser.add_argument('--model', type=str, default='FedRoD', help='Model name.')
     parser.add_argument('--Scenario',type=str,default='MNIST')
 
 
@@ -83,12 +83,12 @@ if __name__ == '__main__':
         dataset = client_datasets[i]
         datasetloader = client_data_loaders[i]
         labels = [train_dataset.targets[idx] for idx in dataset.indices]
-        print(f"Client {i} has {len(labels)} samples with distribution: {torch.bincount(torch.tensor(labels))},"
+        print(f"Client {i} has {len(labels)} samples with distribution: {torch.bincount(torch.tensor(labels), minlength=args.N_Class)},"
               f" total {len(dataset)}=={len(datasetloader.dataset.indices)}")
-        clients_labelnums.append(torch.bincount(torch.tensor(labels)).tolist())
+        clients_labelnums.append(torch.bincount(torch.tensor(labels), minlength=args.N_Class).tolist())
     args.clients_labelnums = clients_labelnums
 
-    args.model = "FedProc"
+    # args.model = "FedRep"
     if args.model == "FedAvg":
         from algorithms.FedAvg import FedAvg_Server
         server = FedAvg_Server(args)

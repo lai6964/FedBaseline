@@ -23,7 +23,7 @@ class ResNet_new(ResNet):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         feature = self.feature_extra(x)
-        out = self.fc(feature)
+        out = self.classifier(feature)
         return out
 def MYNET(num_classes: int):
     return ResNet_new(BasicBlock, [2, 2, 2, 2], num_classes)
@@ -100,7 +100,7 @@ class FedRep_Server(ServerBase):
         self.global_model = copy.deepcopy(self.clients[0].model)
         self.global_model.to(self.device)
 
-    def eval_one(self, epoch, dataloader):
+    def eval(self, epoch, dataloader):
         acc_list = []
         clients = [self.clients[idx] for idx in self.clients_num_choice]
         for client in clients:

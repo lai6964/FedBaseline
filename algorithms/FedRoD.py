@@ -53,7 +53,7 @@ class FedRoD_Client(ClientBase):
                 labels = labels.to(self.device)
                 features, outputs_G, outputs_P = self.model(images)
                 # 这里不知道为啥他们要分开写，我把detach写在model里面了，直接一起回传
-                loss_bsm = self.balanced_softmax_loss(labels, features)
+                loss_bsm = self.balanced_softmax_loss(labels, outputs_G)
                 loss_CE = nn.CrossEntropyLoss()(outputs_G.detach()+outputs_P, labels.long())
                 loss = loss_CE + loss_bsm
                 trainloss += loss.item()
