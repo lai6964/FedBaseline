@@ -64,6 +64,7 @@ class ServerBase(nn.Module):
         self.device = args.device
 
     def ini(self, client_data_loaders):
+        self.write_settings()
         for idx in range(self.args.N_Participants):
             self.clients.append(ClientBase(self.args, idx, client_data_loaders[idx]))
             if len(self.args.Nets_Name_List)==1:
@@ -72,6 +73,12 @@ class ServerBase(nn.Module):
                 self.clients[idx].ini(self.args.Nets_Name_List[idx])
         self.global_model = copy.deepcopy(self.clients[0].model)
         self.global_model.to(self.device)
+
+    def write_settings(self):
+        with open("{}_result.txt".format(self.name), 'a+') as file:
+            for key, value in self.__dict__.items():
+                file.write(f"{key}: {value}\n")
+        return None
 
     def run(self, test_loader = None):
         for epoch in range(self.args.CommunicationEpoch):
@@ -114,7 +121,7 @@ class ServerBase(nn.Module):
             import threading
             def client_task(idx):
                 self.clients[idx].receive_model(self.global_model)
-                self.clients[idx].train(self.global_protos)
+                self.clients[idx].train()
 
             threads = []
             for idx in self.clients_num_choice:

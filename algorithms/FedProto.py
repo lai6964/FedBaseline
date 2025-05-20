@@ -3,7 +3,6 @@
 每个客户端算类别原型，计算类别的全局原型（这里原文和代码不同，原本有客户端上类别样本数量的权重，代码直接取了平均）
 全局只传输了原型，没有传模型
 """
-
 from algorithms.base import *
 from torchvision.models.resnet import ResNet, BasicBlock
 class ResNet_new(ResNet):
@@ -66,8 +65,6 @@ def global_proto_aggregation(local_protos_list):
         for label in local_protos.keys():
             if label in agg_protos_label:
                 agg_protos_label[label].append(local_protos[label])
-            else:
-                agg_protos_label[label] = [local_protos[label]]
 
     for [label, proto_list] in agg_protos_label.items():
         if len(proto_list) > 1:
@@ -92,10 +89,8 @@ class FedProto_Client(ClientBase):
     def train(self, global_protos):
         self.model.to(self.device)
         self.model.train()
-        # optimizer = optim.SGD(net.parameters(), lr=self.local_lr, momentum=0.9, weight_decay=1e-5)
-        optimizer = optim.Adam(self.model.parameters(), lr=self.local_lr, weight_decay=1e-5)
-
-        for epoch in range(self.local_epoch):
+        optimizer = optim.SGD(self.model.parameters(), lr=self.local_lr, momentum=0.9, weight_decay=1e-5)
+        for epoch in tqdm(range(self.local_epoch)):
             trainloss = 0
             for batch_idx, (images, labels) in enumerate(self.train_loader):
                 images = images.to(self.device)
@@ -103,9 +98,7 @@ class FedProto_Client(ClientBase):
                 features, outputs = self.model(images)
                 loss = nn.CrossEntropyLoss()(outputs, labels.long())
 
-                if len(global_protos) == 0:
-                    continue
-                else:
+                if len(global_protos) > 0:
                     f_new = copy.deepcopy(features.data)
                     i = 0
                     for label in labels:
@@ -190,7 +183,7 @@ class FedProto_Server(ServerBase):
         acc = sum(acc_list)/len(acc_list)
         with open("{}_result.txt".format(self.name), 'a+') as fp:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            fp.writelines("\n[{}]epoch_{}_acc:{:.3f}".format(timestamp, epoch, acc))
+            fp.writelines("\n[{}]epoch_{}_acc:{:.3f} for average {} clients".format(timestamp, epoch, acc, len(self.clients_num_choice)))
         return acc
 
 if __name__ == '__main__':

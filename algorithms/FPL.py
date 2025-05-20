@@ -123,6 +123,7 @@ class FPL_Server(ServerBase):
         self.name = "FPL"
 
     def ini(self, client_data_loaders):
+        self.write_settings()
         for idx in range(self.args.N_Participants):
             self.clients.append(FPL_Client(self.args, idx, client_data_loaders[idx]))
             if len(self.args.Nets_Name_List)==1:

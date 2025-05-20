@@ -91,6 +91,7 @@ class FedRep_Server(ServerBase):
         self.aggregate_mode = 'weights'
 
     def ini(self, client_data_loaders):
+        self.write_settings()
         for idx in range(self.args.N_Participants):
             self.clients.append(FedRep_Client(self.args, idx, client_data_loaders[idx]))
             if len(self.args.Nets_Name_List)==1:

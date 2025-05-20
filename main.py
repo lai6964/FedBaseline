@@ -11,7 +11,7 @@ def args_parser():
     parser.add_argument('--Seed',type=int,default=42)
     parser.add_argument('--Dataset_Dir',type=str,default='../Dataset/')
     parser.add_argument('--Model_Path',type=str,default='Model_Storage')
-    parser.add_argument('--model', type=str, default='FedRoD', help='Model name.')
+    parser.add_argument('--model', type=str, default='FedAvg', help='Model name.')
     parser.add_argument('--Scenario',type=str,default='MNIST')
 
 
@@ -22,7 +22,7 @@ def args_parser():
     parser.add_argument('--local_epoch',type=int,default=10)
     parser.add_argument('--public_lr',type=float,default=0.01)
     parser.add_argument('--local_lr',type=float,default=0.01)
-    parser.add_argument('--local_batch_size', type=int, default=64)
+    parser.add_argument('--local_batch_size', type=int, default=256)
     parser.add_argument('--public_batch_size', type=int, default=64)
     parser.add_argument('--ReLoad', type=str2bool, default=False)
     parser.add_argument('--lrschedule', type=str2bool, default=False)
@@ -73,10 +73,12 @@ if __name__ == '__main__':
     # test_dataset = torchvision.datasets.MNIST(root=args.Dataset_Dir, train=False, download=True, transform=Singel_Channel_Nor_TRANSFORM)
     train_dataset = torchvision.datasets.CIFAR10(root=args.Dataset_Dir, train=True, download=True, transform=CON_TRANSFORM)
     test_dataset = torchvision.datasets.CIFAR10(root=args.Dataset_Dir, train=False, download=True, transform=CON_TRANSFORM)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=True, drop_last=True)
-
     # 使用狄利克雷分布分割数据集
-    client_datasets, client_data_loaders = dirichlet_split_noniid(train_dataset, args.Dirichlet_beta, args.N_Participants)
+    client_datasets = dirichlet_split_noniid(train_dataset, args.Dirichlet_beta, args.N_Participants)
+    client_data_loaders = [torch.utils.data.DataLoader(dataset, batch_size=args.local_batch_size, shuffle=True, drop_last=True, num_workers=4, pin_memory=True) for dataset in client_datasets]
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.local_batch_size, shuffle=True, drop_last=True, num_workers=4, pin_memory=True)
+
+
 
     clients_labelnums = []
     for i in range(args.N_Participants):

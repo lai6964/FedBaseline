@@ -21,8 +21,8 @@ def dirichlet_split_noniid(train_dataset, alpha, n_clients):
 
     # 创建客户端数据加载器
     client_datasets = [Subset(train_dataset, idcs) for idcs in client_idcs]
-    client_data_loaders = [DataLoader(dataset, batch_size=32, shuffle=True, drop_last=True) for dataset in client_datasets]
-    return client_datasets, client_data_loaders
+    # client_data_loaders = [DataLoader(dataset, batch_size=32, shuffle=True, drop_last=True) for dataset in client_datasets]
+    return client_datasets
 
 
 if __name__ == '__main__':
